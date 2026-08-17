@@ -1,0 +1,5 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='#414a37'/>
+<g fill='#2f362a'><rect x='8' y='8' width='12' height='12'/><rect x='32' y='8' width='12' height='12'/><rect x='52' y='8' width='4' height='12'/><rect x='20' y='20' width='12' height='12'/><rect x='44' y='20' width='12' height='12'/><rect x='8' y='32' width='12' height='12'/><rect x='32' y='32' width='12' height='12'/><rect x='20' y='44' width='12' height='12'/><rect x='44' y='44' width='12' height='12'/></g>
+<circle cx='32' cy='34' r='15' fill='#e8ddc4'/>
+<path d='M21 36l2-8 5 4 4-7 4 7 5-4 2 8z' fill='#d4af37'/><rect x='21' y='37' width='22' height='3' rx='1.5' fill='#d4af37'/>
+</svg>
