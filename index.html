@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2c3a28">
+<meta name="description" content="Crown Draughts — diagonal pieces, mandatory captures, chain jumps and crowning on a carved stone board in a royal garden.">
+<title>Crown Draughts</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23414a37'/%3E%3Ccircle cx='16' cy='19' r='7' fill='%23e8ddc4'/%3E%3Cpath d='M10 12l3 3 3-4 3 4 3-3v6H10z' fill='%23d4af37'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body data-theme="royal-garden" data-screen="boot">
+<noscript>
+  <div class="noscript-note">
+    <h1>Crown Draughts</h1>
+    <p>Crown Draughts is a JavaScript game. Please enable JavaScript to play.</p>
+  </div>
+</noscript>
+
+<div id="app">
+  <!-- 3D scene fills the game region; the semantic HTML layer sits over/beside it -->
+  <div id="scene-region" aria-hidden="true">
+    <div id="scene-container"></div>
+    <div id="webgl-fallback" hidden>
+      <p><strong>3D view unavailable.</strong> Your browser could not create a WebGL context.
+      The full game remains playable on the HTML board below.</p>
+    </div>
+  </div>
+
+  <!-- In-game UI layer -->
+  <div id="game-ui" hidden>
+    <header id="topbar" class="hud-region"></header>
+    <aside id="rail-left" class="hud-region" aria-label="Objective and progress"></aside>
+    <aside id="rail-right" class="hud-region" aria-label="Actions and status"></aside>
+    <div id="tray-bottom" class="hud-region" aria-label="Quick actions"></div>
+    <div id="dom-board-container" aria-label="HTML board"></div>
+  </div>
+
+  <!-- Menu screens -->
+  <div id="screens">
+    <section class="screen" data-screen="boot">
+      <div class="boot-panel">
+        <h1 class="game-title">Crown Draughts</h1>
+        <p class="tagline">Carved stone, quiet gardens, sharp tactics.</p>
+        <div class="boot-bar" role="progressbar" aria-label="Loading"></div>
+      </div>
+    </section>
+    <section class="screen" data-screen="title" hidden></section>
+    <section class="screen" data-screen="modes" hidden></section>
+    <section class="screen" data-screen="practice" hidden></section>
+    <section class="screen" data-screen="local" hidden></section>
+    <section class="screen" data-screen="journey" hidden></section>
+    <section class="screen" data-screen="stage-setup" hidden></section>
+    <section class="screen" data-screen="learn" hidden></section>
+    <section class="screen" data-screen="challenges" hidden></section>
+    <section class="screen" data-screen="challenge-setup" hidden></section>
+    <section class="screen" data-screen="daily" hidden></section>
+    <section class="screen" data-screen="lobby" hidden></section>
+    <section class="screen" data-screen="table-room" hidden></section>
+    <section class="screen" data-screen="results" hidden></section>
+  </div>
+
+  <div id="overlay-root"></div>
+
+  <!-- Toasts and live regions -->
+  <div id="toast-region" aria-live="polite" aria-atomic="false"></div>
+  <div id="live-region" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+  <div id="alert-region" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

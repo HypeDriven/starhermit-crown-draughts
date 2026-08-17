@@ -1,0 +1,13 @@
+{
+  "name": "crown-draughts",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Crown Draughts — carved-stone draughts in a royal garden. Deterministic rules engine, Three.js presentation, semantic HTML interface.",
+  "scripts": {
+    "test": "node --test tests/engine.test.mjs tests/ai.test.mjs tests/content.test.mjs tests/session.test.mjs tests/server.test.mjs",
+    "check": "node tools/check.mjs",
+    "bake": "node tools/bake-content.mjs",
+    "serve": "node server.js --dev"
+  }
+}
