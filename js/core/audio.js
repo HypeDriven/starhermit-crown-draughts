@@ -14,6 +14,8 @@ export class AudioEngine {
     this._musicTimer = null;
     this._started = false;
     this._intensity = 0; // 0 calm, 1 endgame — adaptive layer
+    this._buffers = new Map(); // name -> AudioBuffer | null (failed)
+    this._loading = new Set();
   }
 
   /** Must be called from a user gesture. Idempotent. */
@@ -61,6 +63,38 @@ export class AudioEngine {
     else this.ctx.resume();
   }
 
+  // --- SFX: authored samples from sfx/ with synthesized fallback ---------------
+
+  /** Lazily fetch + decode `sfx/<name>.opus`; failures are cached as null. */
+  _loadSample(name) {
+    if (this._loading.has(name) || this._buffers.has(name)) return;
+    this._loading.add(name);
+    fetch(`sfx/${name}.opus`)
+      .then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.arrayBuffer(); })
+      .then((ab) => (this.ctx ? this.ctx.decodeAudioData(ab) : null))
+      .then((buf) => this._buffers.set(name, buf || null))
+      .catch(() => this._buffers.set(name, null))
+      .finally(() => this._loading.delete(name));
+  }
+
+  /** Play an authored sample on a bus. Returns false when unavailable so the
+   *  caller can fall back to the synthesized transient. */
+  _sfx(name, { bus = 'effects' } = {}) {
+    if (!this.ctx) return false;
+    const buf = this._buffers.get(name);
+    if (buf === undefined) { this._loadSample(name); return false; }
+    if (buf === null) return false;
+    try {
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(this.buses[bus] || this.buses.effects);
+      src.start();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // --- SFX: short original transients --------------------------------------
 
   _env(gainNode, t0, a, peak, d) {
@@ -105,43 +139,73 @@ export class AudioEngine {
   }
 
   // Event map — one sound per logical event, layered for material feel.
-  select() { this._tone({ freq: 740, type: 'triangle', dur: 0.05, gain: 0.10 }); }
-  hover() { this._tone({ freq: 980, type: 'sine', dur: 0.03, gain: 0.04 }); }
-  uiClick() { this._tone({ freq: 620, type: 'triangle', dur: 0.05, gain: 0.10 }); }
-  uiOpen() { this._tone({ freq: 440, freqEnd: 660, type: 'sine', dur: 0.09, gain: 0.08 }); }
+  // Each prefers its authored sample from sfx/ and falls back to synthesis.
+  select() { if (this._sfx('piece-lift')) return; this._tone({ freq: 740, type: 'triangle', dur: 0.05, gain: 0.10 }); }
+  hover() { if (this._sfx('ui-hover')) return; this._tone({ freq: 980, type: 'sine', dur: 0.03, gain: 0.04 }); }
+  uiClick() { if (this._sfx('ui-click')) return; this._tone({ freq: 620, type: 'triangle', dur: 0.05, gain: 0.10 }); }
+  uiOpen() { if (this._sfx('ui-modal-open')) return; this._tone({ freq: 440, freqEnd: 660, type: 'sine', dur: 0.09, gain: 0.08 }); }
   invalid() {
+    if (this._sfx('ui-error')) return;
     this._tone({ freq: 160, freqEnd: 120, type: 'square', dur: 0.1, gain: 0.07 });
     this._noise({ dur: 0.06, gain: 0.05, freq: 300 });
   }
   move() {
+    if (this._sfx('piece-slide')) return;
     this._noise({ dur: 0.07, gain: 0.16, freq: 900, q: 1.2 });
     this._tone({ freq: 220, freqEnd: 140, type: 'sine', dur: 0.08, gain: 0.12 });
   }
   capture() {
+    if (this._sfx('capture')) return;
     this._noise({ dur: 0.12, gain: 0.22, freq: 500, q: 0.9 });
     this._tone({ freq: 130, freqEnd: 70, type: 'sine', dur: 0.16, gain: 0.22 });
     this._noise({ dur: 0.05, gain: 0.1, freq: 2600, q: 2 });
   }
   crown() {
+    if (this._sfx('king')) return;
     const notes = [523.25, 659.25, 783.99, 1046.5];
     notes.forEach((f, i) => setTimeout(() => this._tone({ freq: f, type: 'triangle', dur: 0.3, gain: 0.12 }), i * 70));
   }
-  turn() { this._tone({ freq: 880, type: 'sine', dur: 0.1, gain: 0.07 }); }
-  hint() { this._tone({ freq: 660, freqEnd: 990, type: 'sine', dur: 0.12, gain: 0.08 }); }
-  undo() { this._tone({ freq: 500, freqEnd: 350, type: 'sine', dur: 0.1, gain: 0.08 }); }
+  turn() { if (this._sfx('turn-pass')) return; this._tone({ freq: 880, type: 'sine', dur: 0.1, gain: 0.07 }); }
+  hint() { if (this._sfx('hint')) return; this._tone({ freq: 660, freqEnd: 990, type: 'sine', dur: 0.12, gain: 0.08 }); }
+  undo() { if (this._sfx('undo')) return; this._tone({ freq: 500, freqEnd: 350, type: 'sine', dur: 0.1, gain: 0.08 }); }
   win() {
+    if (this._sfx('win', { bus: 'music' })) return;
     const seq = [392, 523.25, 659.25, 783.99];
     seq.forEach((f, i) => setTimeout(() => this._tone({ freq: f, type: 'triangle', dur: 0.4, gain: 0.14, bus: 'music' }), i * 120));
   }
   lose() {
+    if (this._sfx('lose', { bus: 'music' })) return;
     const seq = [330, 277, 220];
     seq.forEach((f, i) => setTimeout(() => this._tone({ freq: f, type: 'sine', dur: 0.5, gain: 0.12, bus: 'music' }), i * 160));
   }
-  draw() { this._tone({ freq: 440, type: 'sine', dur: 0.4, gain: 0.1, bus: 'music' }); }
+  draw() { if (this._sfx('draw', { bus: 'music' })) return; this._tone({ freq: 440, type: 'sine', dur: 0.4, gain: 0.1, bus: 'music' }); }
   achievement() {
+    if (this._sfx('ui-success')) return;
     [880, 1108.7, 1318.5].forEach((f, i) => setTimeout(() => this._tone({ freq: f, type: 'sine', dur: 0.25, gain: 0.1 }), i * 90));
   }
-  clockWarn() { this._tone({ freq: 1050, type: 'square', dur: 0.06, gain: 0.06 }); }
+  clockWarn() { if (this._sfx('ui-timer-warning')) return; this._tone({ freq: 1050, type: 'square', dur: 0.06, gain: 0.06 }); }
+
+  // Events without a synthesized legacy — sample with a synth-era fallback.
+  uiConfirm() { if (!this._sfx('ui-confirm')) this.uiClick(); }
+  uiBack() { if (!this._sfx('ui-back')) this.uiClick(); }
+  toggle() { if (!this._sfx('ui-toggle')) this.uiClick(); }
+  tabSwitch() { if (!this._sfx('ui-tab-switch')) this.uiClick(); }
+  sliderDrag() { if (!this._sfx('ui-slider-drag')) this.uiClick(); }
+  scrollTick() { if (!this._sfx('ui-scroll-tick')) this.hover(); }
+  panelClose() { if (!this._sfx('ui-panel-close')) this.uiClick(); }
+  toast() { if (!this._sfx('ui-toast')) this.uiOpen(); }
+  pause() { if (!this._sfx('ui-pause')) this.uiOpen(); }
+  resume() { if (!this._sfx('ui-resume')) this.uiOpen(); }
+  countdownTick() { if (!this._sfx('ui-countdown-tick')) this.uiClick(); }
+  roundStart() { if (!this._sfx('round-start')) this.turn(); }
+  settingsSaved() { if (!this._sfx('ui-settings-saved')) this.uiClick(); }
+  multiJump() { if (!this._sfx('multi-jump')) this.capture(); }
+  mandatoryCapture() { if (!this._sfx('mandatory-capture-alert')) this.invalid(); }
+  opponentTurn() { if (!this._sfx('opponent-turn')) this.turn(); }
+  starAward() { if (!this._sfx('star-award')) this.achievement(); }
+  levelFail() { if (!this._sfx('level-fail')) this.lose(); }
+  newRecord() { if (!this._sfx('new-record')) this.achievement(); }
+  streak() { if (!this._sfx('streak')) this.achievement(); }
 
   /** Optional spoken cue (voice bus). Text is short and already localized by UI. */
   speak(text) {

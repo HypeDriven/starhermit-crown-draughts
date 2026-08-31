@@ -94,7 +94,9 @@ export class GameController {
   _onAction({ action, description, remote }) {
     const audio = this.app.audio;
     if (action.type === 'move') {
-      if (action.captures.length) audio.capture(); else audio.move();
+      if (action.captures.length >= 2) audio.multiJump();
+      else if (action.captures.length) audio.capture();
+      else audio.move();
       if (action.crowns) audio.crown();
       if (action.captures.length && this.app.settings.accessibility.haptics) {
         try { navigator.vibrate?.(30); } catch { /* unsupported */ }
@@ -122,7 +124,7 @@ export class GameController {
       this.app.ui.addLogEntry(description);
       this.app.ui.announce(description);
     }
-    this.app.audio.turn();
+    if (remote) this.app.audio.opponentTurn(); else this.app.audio.turn();
     this._updateHud();
   }
 
@@ -132,7 +134,8 @@ export class GameController {
   }
 
   _onInvalid({ reason, message }) {
-    this.app.audio.invalid();
+    if (reason === 'must-capture') this.app.audio.mandatoryCapture();
+    else this.app.audio.invalid();
     this.app.ui.toast(message || INVALID_REASON_TEXT[reason] || 'Not legal', 'warn');
     this.app.ui.announce(message || 'That move is not legal', true);
     const v = this.selected != null ? this.app.renderer.board?.pieces.get(this.selected) : null;
@@ -155,6 +158,7 @@ export class GameController {
     const iWon = humanSeats.some((h) => h.i === over.winner);
     if (over.winner === null) this.app.audio.draw();
     else if (iWon) this.app.audio.win();
+    else if (['challenge', 'journey'].includes(this.session.config?.mode)) this.app.audio.levelFail();
     else this.app.audio.lose();
     this.opts.onOver?.(over);
   }

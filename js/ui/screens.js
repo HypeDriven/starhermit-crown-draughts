@@ -3,6 +3,7 @@
 // the canvas stays live behind menus.
 
 import { el, button, Modal, confirmDialog } from './widgets.js';
+import { audio } from '../core/audio.js';
 import { RULESETS } from '../rules/engine.js';
 import { AI_LEVELS } from '../rules/ai.js';
 import { JOURNEY_STAGES, JOURNEY_CHAPTERS, stageUnlocked, journeyStats } from '../content/index.js';
@@ -342,6 +343,7 @@ export function buildProfile(app, modal) {
   nameInput.addEventListener('change', () => {
     p.name = nameInput.value.trim() || 'Guest Gardener';
     app.saveProfile();
+    audio.settingsSaved();
     app.ui.toast('Name saved.');
   });
   box.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Display name' }), nameInput]));
@@ -531,6 +533,7 @@ export function buildSettings(app, modal) {
   for (const [id, label, builder] of defs) {
     const tab = el('button', { type: 'button', role: 'tab', class: `tab${first ? ' active' : ''}`, text: label, 'aria-selected': first });
     tab.addEventListener('click', () => {
+      audio.tabSwitch();
       tabs.querySelectorAll('.tab').forEach((t) => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
       tab.classList.add('active');
       tab.setAttribute('aria-selected', 'true');
@@ -548,6 +551,7 @@ function sliderRow(label, value, onInput, { min = 0, max = 1, step = 0.05 } = {}
   const val = el('span', { class: 'slider-val', text: `${Math.round(value * 100)}%` });
   input.addEventListener('input', () => {
     val.textContent = `${Math.round(Number(input.value) * 100)}%`;
+    audio.sliderDrag();
     onInput(Number(input.value));
   });
   return el('label', { class: 'field slider-row' }, [el('span', { text: label }), input, val]);
@@ -556,7 +560,7 @@ function sliderRow(label, value, onInput, { min = 0, max = 1, step = 0.05 } = {}
 function toggleRow(label, checked, onChange, hint = '') {
   const input = el('input', { type: 'checkbox', class: 'toggle' });
   input.checked = checked;
-  input.addEventListener('change', () => onChange(input.checked));
+  input.addEventListener('change', () => { audio.toggle(); onChange(input.checked); });
   return el('label', { class: 'field toggle-row' }, [input, el('span', { text: label }), hint ? el('small', { text: hint }) : null]);
 }
 

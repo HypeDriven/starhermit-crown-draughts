@@ -185,7 +185,7 @@ export function createAuthoritativeEngine({ now = () => Date.now(), persist = nu
       const capacity = RULESETS[sess.ruleset].playerCount;
       if (sess.seats.length >= capacity) return { ok: false, error: 'session-full' };
       if (sess.started) return { ok: false, error: 'already-started' };
-      if (!sess.listed && sess.joinCode !== String(joinCode || sess.joinCode).toUpperCase() && sess.seats.length > 0) {
+      if (!sess.listed && sess.joinCode !== String(joinCode || '').toUpperCase() && sess.seats.length > 0) {
         return { ok: false, error: 'bad-join-code' };
       }
       const seat = sess.seats.length;
@@ -439,6 +439,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
+  '.opus': 'audio/ogg',
 };
 
 export async function startDevServer({ port = 8080, dataFile = DATA_FILE, quiet = false } = {}) {
@@ -481,6 +482,11 @@ export async function startDevServer({ port = 8080, dataFile = DATA_FILE, quiet 
     return url.searchParams.get('token') || null;
   };
 
+  // malformed percent-encoding is a 400, never a crashed process
+  const safeDecode = (s) => {
+    try { return decodeURIComponent(s); } catch { return null; }
+  };
+
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const path = url.pathname;
@@ -510,42 +516,55 @@ export async function startDevServer({ port = 8080, dataFile = DATA_FILE, quiet 
       if (mJoin && req.method === 'POST') {
         const body = await readBody(req);
         if (!body) return send(res, 400, { error: 'bad-json' });
-        const out = engine.joinSession(decodeURIComponent(mJoin[1]), body);
+        const id = safeDecode(mJoin[1]);
+        if (id === null) return send(res, 400, { error: 'bad-encoding' });
+        const out = engine.joinSession(id, body);
         return send(res, out.ok ? 200 : 400, out);
       }
       const mStart = sub.match(/^\/sessions\/([^/]+)\/start$/);
       if (mStart && req.method === 'POST') {
-        const out = engine.startSession(decodeURIComponent(mStart[1]), authOf(req, url));
+        const id = safeDecode(mStart[1]);
+        if (id === null) return send(res, 400, { error: 'bad-encoding' });
+        const out = engine.startSession(id, authOf(req, url));
         return send(res, out.ok ? 200 : 400, out);
       }
       const mCmd = sub.match(/^\/sessions\/([^/]+)\/commands$/);
       if (mCmd && req.method === 'POST') {
         const body = await readBody(req);
         if (!body) return send(res, 400, { error: 'bad-json' });
-        const out = engine.submitCommand(decodeURIComponent(mCmd[1]), authOf(req, url), body);
+        const id = safeDecode(mCmd[1]);
+        if (id === null) return send(res, 400, { error: 'bad-encoding' });
+        const out = engine.submitCommand(id, authOf(req, url), body);
         return send(res, out.ok ? 200 : 400, out);
       }
       const mChat = sub.match(/^\/sessions\/([^/]+)\/chat$/);
       if (mChat && req.method === 'POST') {
         const body = await readBody(req);
         if (!body) return send(res, 400, { error: 'bad-json' });
-        const out = engine.chat(decodeURIComponent(mChat[1]), authOf(req, url), body?.text);
+        const id = safeDecode(mChat[1]);
+        if (id === null) return send(res, 400, { error: 'bad-encoding' });
+        const out = engine.chat(id, authOf(req, url), body?.text);
         return send(res, out.ok ? 200 : 400, out);
       }
       const mReport = sub.match(/^\/sessions\/([^/]+)\/report$/);
       if (mReport && req.method === 'POST') {
         const body = await readBody(req);
-        const out = engine.report(decodeURIComponent(mReport[1]), authOf(req, url), body || {});
+        const id = safeDecode(mReport[1]);
+        if (id === null) return send(res, 400, { error: 'bad-encoding' });
+        const out = engine.report(id, authOf(req, url), body || {});
         return send(res, out.ok ? 200 : 400, out);
       }
       const mReplay = sub.match(/^\/sessions\/([^/]+)\/replay$/);
       if (mReplay && req.method === 'GET') {
-        const out = engine.replay(decodeURIComponent(mReplay[1]), authOf(req, url));
+        const id = safeDecode(mReplay[1]);
+        if (id === null) return send(res, 400, { error: 'bad-encoding' });
+        const out = engine.replay(id, authOf(req, url));
         return send(res, out.ok ? 200 : 403, out);
       }
       const mEvents = sub.match(/^\/sessions\/([^/]+)\/events$/);
       if (mEvents && req.method === 'GET') {
-        const id = decodeURIComponent(mEvents[1]);
+        const id = safeDecode(mEvents[1]);
+        if (id === null) return send(res, 400, { error: 'bad-encoding' });
         res.writeHead(200, {
           'content-type': 'text/event-stream',
           'cache-control': 'no-cache',
@@ -564,14 +583,17 @@ export async function startDevServer({ port = 8080, dataFile = DATA_FILE, quiet 
       }
       const mGet = sub.match(/^\/sessions\/([^/]+)$/);
       if (mGet && req.method === 'GET') {
-        const out = engine.getSession(decodeURIComponent(mGet[1]), authOf(req, url));
+        const id = safeDecode(mGet[1]);
+        if (id === null) return send(res, 400, { error: 'bad-encoding' });
+        const out = engine.getSession(id, authOf(req, url));
         return send(res, out.ok ? 200 : 403, out.ok ? out.data : out);
       }
       return send(res, 404, { error: 'not-found' });
     }
 
     // static files
-    let rel = decodeURIComponent(path);
+    let rel = safeDecode(path);
+    if (rel === null) return send(res, 400, { error: 'bad-encoding' });
     if (rel === '/') rel = '/index.html';
     const filePath = normalize(join(ROOT, rel));
     if (!filePath.startsWith(ROOT)) return send(res, 403, { error: 'forbidden' });

@@ -1,5 +1,7 @@
 // Small DOM helpers shared across screens.
 
+import { audio } from '../core/audio.js';
+
 export function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -34,6 +36,7 @@ export class Modal {
     });
     this.backdrop.appendChild(this.box);
     root.appendChild(this.backdrop);
+    audio.uiOpen();
     this.backdrop.addEventListener('pointerdown', (e) => {
       if (e.target === this.backdrop) this.close();
     });
@@ -54,6 +57,7 @@ export class Modal {
     if (!this.backdrop.isConnected) return;
     document.removeEventListener('keydown', this._keyHandler, true);
     this.backdrop.remove();
+    audio.panelClose();
     this.onClose?.();
     if (this.prevFocus?.focus) this.prevFocus.focus();
   }
@@ -65,8 +69,8 @@ export function confirmDialog(root, { title, body, confirmLabel = 'Confirm', dan
     modal.box.appendChild(el('h2', { text: title }));
     if (body) modal.box.appendChild(el('p', { text: body, class: 'modal-body' }));
     const row = el('div', { class: 'modal-actions' });
-    row.appendChild(button('Cancel', () => { modal.close(); resolve(false); }));
-    row.appendChild(button(confirmLabel, () => { modal.close(); resolve(true); }, { kind: danger ? 'danger' : 'primary' }));
+    row.appendChild(button('Cancel', () => { audio.uiBack(); modal.close(); resolve(false); }));
+    row.appendChild(button(confirmLabel, () => { audio.uiConfirm(); modal.close(); resolve(true); }, { kind: danger ? 'danger' : 'primary' }));
     modal.box.appendChild(row);
     row.querySelector('.btn-danger, .btn-primary')?.focus();
   });

@@ -206,7 +206,8 @@ export class App {
       overlay.classList.remove('pop');
       void overlay.offsetWidth;
       overlay.classList.add('pop');
-      if (i === steps.length - 1) this.audio.turn();
+      if (i === steps.length - 1) this.audio.roundStart();
+      else this.audio.countdownTick();
       i += 1;
       this._countdownT = setTimeout(tick, stepMs);
     };
@@ -429,6 +430,7 @@ export class App {
     this.applyTheme(this.settings.theme);
     this.go('game');
     this.game.begin();
+    this.audio.roundStart();
     this.ui.toast('Round started. Good luck!', 'ok');
     this.platform.startPresence('playing');
   }
@@ -495,6 +497,10 @@ export class App {
     const active = this.$screens.querySelector('[data-screen="results"]');
     screens.buildResults(this, active, { over, config, outcome });
     this.go('results');
+    if (outcome.stars > 0) this.audio.starAward();
+    if (outcome.recordBroken) this.audio.newRecord();
+    if (outcome.unlocked?.length) this.audio.achievement();
+    if (config.mode === 'daily' && outcome.iWon && this.progress.stats.dailyStreak >= 3) this.audio.streak();
     this.announce(`${over.winner === null ? 'Draw' : outcome.iWon ? 'Victory' : 'Round over'}. ${over.reasonText}`, true);
   }
 
@@ -556,12 +562,14 @@ export class App {
       const hosted = this.session.config.mode === 'hosted';
       if (!hosted) this.session.pause('manual');
       this.renderer.setPaused(!hosted);
+      this.audio.pause();
       this._pauseModal = new Modal(this.$overlay, {
         title: 'Paused',
         onClose: () => {
           this._pauseModal = null;
           this.session?.resume();
           this.renderer.setPaused(false);
+          this.audio.resume();
         },
       });
       const box = this._pauseModal.box;
@@ -683,6 +691,7 @@ export class App {
       return;
     }
     if (action === 'cancel' && this._screen !== 'title') {
+      this.audio.uiBack();
       this.go(this._screen === 'modes' ? 'title' : 'modes');
     }
   }
@@ -717,6 +726,12 @@ export class App {
     };
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
+    // hover tick on interactive elements (pointer only, never required)
+    document.addEventListener('pointerover', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      const hit = e.target.closest?.('button, select, input, a[href], [role="tab"]');
+      if (hit && hit !== e.relatedTarget?.closest?.('button, select, input, a[href], [role="tab"]')) this.audio.hover();
+    });
   }
 
   _currentThemeObj() {
@@ -914,6 +929,7 @@ export class App {
   toast(msg, kind = 'info', ms = 2600) {
     const t = el('div', { class: `toast toast-${kind}`, role: 'status', text: msg });
     this.$toast.appendChild(t);
+    if (kind !== 'warn') this.audio.toast();
     setTimeout(() => t.classList.add('gone'), ms);
     setTimeout(() => t.remove(), ms + 400);
   }
