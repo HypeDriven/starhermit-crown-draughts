@@ -72,11 +72,15 @@ button { font-family: inherit; }
 .screen {
   position: absolute; inset: 0; overflow-y: auto;
   padding: calc(20px + var(--sat)) calc(20px + var(--sar)) calc(20px + var(--sab)) calc(20px + var(--sal));
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  display: flex; flex-direction: column; align-items: center;
   pointer-events: auto;
 }
 .screen[hidden] { display: none; }
 .screen > * { max-width: 960px; width: 100%; }
+/* vertical centering via auto margins: when content overflows, these collapse
+   to 0 and the column starts at the top instead of clipping its first rows */
+.screen > :first-child { margin-top: auto; }
+.screen > :last-child { margin-bottom: auto; }
 
 .boot-panel { text-align: center; }
 .game-title {
@@ -346,6 +350,17 @@ button { font-family: inherit; }
 .modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; margin-top: 1rem; }
 .pause-actions { display: flex; flex-direction: column; gap: 0.5rem; }
 
+/* telemetry consent: a docked banner, never a screen-covering modal */
+.consent-banner {
+  position: fixed; left: 50%; bottom: calc(12px + var(--sab)); transform: translateX(-50%);
+  z-index: 40; background: var(--panel-solid); border: 1px solid var(--line);
+  border-radius: 14px; padding: 0.8rem 1.1rem;
+  width: max-content; max-width: min(480px, calc(100vw - 24px - var(--sal) - var(--sar)));
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.consent-banner .consent-text { font-size: 0.85rem; color: var(--ink-dim); margin: 0; }
+.consent-banner .modal-actions { margin-top: 0.6rem; }
+
 /* settings */
 .settings-tabs { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
 .tab { border-radius: 8px; padding: 0.4rem 0.8rem; background: transparent; color: var(--ink-dim); border: 1px solid var(--line); cursor: pointer; min-height: 40px; }
@@ -411,7 +426,13 @@ button { font-family: inherit; }
   #rail-left, #rail-right { display: none; }
   #tray-bottom { display: flex; }
   .topbar-left h2 { font-size: 0.95rem; }
-  .mode-grid { grid-template-columns: 1fr; }
+  .mode-grid { grid-template-columns: 1fr; gap: 0.5rem; }
+  /* compact mode cards so all eight modes fit without scrolling; the name and
+     meta line stay, the long description blurb is desktop-only */
+  .mode-card { padding: 0.55rem 0.8rem; }
+  .mode-card h3 { margin: 0 0 0.1rem; }
+  .mode-card > p:not(.mode-meta) { display: none; }
+  .mode-card .mode-meta { margin-top: 0.15rem; }
   .stage-grid { grid-template-columns: repeat(4, 1fr); }
   #dom-board-container { bottom: calc(76px + var(--sab)); }
 }

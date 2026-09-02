@@ -34,7 +34,7 @@ await page.goto(base, { waitUntil: 'networkidle2', timeout: 30000 });
 await page.waitForFunction(() => document.body.dataset.screen === 'title', { timeout: 15000 });
 check('boots to title screen', true);
 // dismiss the first-boot consent dialog for clean captures
-await page.evaluate(() => [...document.querySelectorAll('.modal button')].find((b) => b.textContent === 'No thanks')?.click());
+await page.evaluate(() => [...document.querySelectorAll('.modal button, .consent-banner button')].find((b) => b.textContent === 'No thanks')?.click());
 await new Promise((r) => setTimeout(r, 300));
 await page.screenshot({ path: `${SHOTS}/01-title.png` });
 
@@ -269,7 +269,7 @@ await page2.close();
 await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 await page.waitForFunction(() => ['title', 'boot'].includes(document.body.dataset.screen), { timeout: 15000 });
 await page.waitForFunction(() => document.body.dataset.screen === 'title', { timeout: 15000 });
-await page.evaluate(() => [...document.querySelectorAll('.modal button')].find((b) => b.textContent === 'No thanks')?.click());
+await page.evaluate(() => [...document.querySelectorAll('.modal button, .consent-banner button')].find((b) => b.textContent === 'No thanks')?.click());
 await new Promise((r) => setTimeout(r, 400));
 await page.screenshot({ path: `${SHOTS}/09-mobile-portrait.png` });
 const trayVisible = await page.evaluate(() => {

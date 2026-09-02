@@ -759,22 +759,21 @@ export class App {
 
   _maybeAskConsent() {
     if (this.settings.telemetryConsent !== null) return;
-    const modal = new Modal(this.$overlay, { title: 'Anonymous stats' });
-    modal.box.appendChild(el('h2', { text: 'Anonymous usage stats?' }));
-    modal.box.appendChild(el('p', { text: 'Help improve Crown Draughts with anonymous funnel events (round start/end, tutorial steps, errors). No text, pointers, or personal data — ever. Off by default.' }));
-    const row = el('div', { class: 'modal-actions' });
-    row.appendChild(button('No thanks', () => {
-      this.settings.telemetryConsent = false;
+    // Non-blocking banner, not a modal: the menu must stay usable while it is up.
+    const dismiss = (consent) => {
+      this.settings.telemetryConsent = consent;
+      if (consent) this.platform.setTelemetryConsent(true);
       this.saveSettings();
-      modal.close();
-    }));
-    row.appendChild(button('Allow', () => {
-      this.settings.telemetryConsent = true;
-      this.platform.setTelemetryConsent(true);
-      this.saveSettings();
-      modal.close();
-    }, { kind: 'primary' }));
-    modal.box.appendChild(row);
+      banner.remove();
+    };
+    const banner = el('div', { class: 'consent-banner', role: 'dialog', 'aria-label': 'Anonymous stats' }, [
+      el('p', { class: 'consent-text', text: 'Help improve Crown Draughts with anonymous usage stats (round start/end, tutorial steps, errors). No text, pointers, or personal data — ever. Off by default.' }),
+      el('div', { class: 'modal-actions' }, [
+        button('No thanks', () => dismiss(false)),
+        button('Allow', () => dismiss(true), { kind: 'primary' }),
+      ]),
+    ]);
+    this.$overlay.appendChild(banner);
   }
 
   async _syncCloudSave() {
