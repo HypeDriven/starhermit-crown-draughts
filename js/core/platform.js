@@ -19,7 +19,7 @@ export class Platform {
     this._listeners = new Set();
   }
 
-  /** Detect host environment. Awaits a ping; never throws. */
+  /** Detect host environment. Probes /api/v1/time once; never throws. */
   async init() {
     const params = new URLSearchParams(globalThis.location?.search || '');
     this.launchToken = params.get('launch_token') || null;
@@ -27,27 +27,19 @@ export class Platform {
       this.mode = 'hosted';
       this.accountToken = globalThis.__STARHERMIT__.accountToken || null;
     }
-    // Same-origin API detection (hosted or dev server)
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 2500);
-      const res = await fetch('/api/v1/ping', { signal: ctrl.signal });
-      clearTimeout(t);
-      if (res.ok) {
-        const body = await res.json().catch(() => ({}));
-        if (body?.ok) {
-          if (this.mode !== 'hosted') this.mode = 'dev';
-          this.baseUrl = '';
-          await this.syncTime();
-        }
-      }
-    } catch {
-      /* standalone — no API reachable */
+    // GET /api/v1/time is the only API route the platform guarantees; probe
+    // it once for clock sync. The full REST/SSE API exists only on this
+    // game's own dev server, so it is enabled solely on localhost — anywhere
+    // else every other route would 404.
+    const synced = await this.syncTime();
+    if (synced && this.mode !== 'hosted' && isLocalDev()) {
+      this.mode = 'dev';
+      this.baseUrl = '';
     }
     return this.mode;
   }
 
-  get online() { return this.mode === 'hosted' || this.mode === 'dev'; }
+  get online() { return this.mode === 'dev'; }
 
   /** Server-synchronized now (round-trip adjusted). */
   serverNow() { return Date.now() + this.timeOffsetMs; }
@@ -59,8 +51,10 @@ export class Platform {
       const t1 = Date.now();
       if (!res.ok) return false;
       const body = await res.json();
+      const serverMs = Number(body.epochMs ?? body.serverTime ?? body.now);
+      if (!Number.isFinite(serverMs)) return false;
       const rtt = t1 - t0;
-      this.timeOffsetMs = (body.epochMs + rtt / 2) - t1;
+      this.timeOffsetMs = (serverMs + rtt / 2) - t1;
       this.timeSyncedAt = Date.now();
       return true;
     } catch {
@@ -219,6 +213,11 @@ export class Platform {
       if (pollTimer) clearTimeout(pollTimer);
     };
   }
+}
+
+function isLocalDev() {
+  const h = globalThis.location?.hostname || '';
+  return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]';
 }
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
