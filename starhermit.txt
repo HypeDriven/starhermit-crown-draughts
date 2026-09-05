@@ -5,3 +5,4 @@ server=server.js
 version=1.0.0
 ruleset-engine=js/rules/engine.js
 content-version=1
+cover=coverart.png

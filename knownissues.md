@@ -11,7 +11,7 @@ alongside the game's own unit tests, end-to-end suite, and an independent engine
 | `node --check` on all modules | clean (`js/**/*.js`, `server.js`, `tools/*.mjs`, `tests/*.mjs`) |
 | `tests/e2e.mjs` (headless Chrome via puppeteer-core) | PASS — 28/28 checks, "e2e all green", no console errors |
 | Independent engine sweep (180 random games across `duel`/`grand`/`melee`, 14 661 plies) | 0 mandatory-capture violations, 0 apply errors, 390 promotions, all games terminated |
-| HTTP fuzz of `server.js` | **found a remote crash** — see confirmed defect 1 |
+| HTTP fuzz of `server.js` | **found a remote crash** — see resolved defect 1 (malformed percent-encoding → 400, process survives since the fix) |
 
 `starhermit.txt` declares `server=server.js`, so the server below is the shipped authoritative script,
 not just a local dev convenience.
@@ -21,10 +21,21 @@ not just a local dev convenience.
 Both were reproduced against a freshly started `server.js` whose PID I tracked, so neither is a
 mis-attributed external process kill.
 
-**Update 2026-08-26 — both fixed and verified live (malformed URL → 400, process survives;
-code-less join on a private table → `bad-join-code`); `npm test` 61/61 pass afterwards.**
+**No open confirmed defects remain.** The two below were fixed and are now reported under
+[Resolved](#resolved-defects). See the `Resolved` section for the fix summaries and re-verification.
 
-### 1. `GET /%` — any malformed percent-encoding kills the server process — **FIXED 2026-08-26**
+## Resolved defects
+
+> **Re-verified 2026-09-04 (this pass):** both fixes confirmed present in the current source and
+> reproduced live against a freshly started `server.js` — `GET /%` and `GET /api/v1/sessions/%` each
+> return `400 {error:'bad-encoding'}`; a code-less or empty-code join on an unlisted table returns
+> `400 {error:'bad-join-code'}`; the process survives and `GET /api/v1/ping` returns 200 afterwards.
+> `npm test` 61/61 pass; `tests/e2e.mjs` exits 0 with "e2e all green" (28/28 checks).
+>
+> Originally fixed and verified live **2026-08-26** (malformed URL → 400, process survives;
+> code-less join on a private table → `bad-join-code`); `npm test` 61/61 pass afterwards.
+
+### 1. `GET /%` — any malformed percent-encoding kills the server process — **RESOLVED 2026-08-26**
 
 - **Fix:** a `safeDecode` helper (try/catch around `decodeURIComponent`) was added ahead of
   `createServer`, and all nine call sites in the handler use it; a malformed encoding now returns
@@ -63,7 +74,7 @@ code-less join on a private table → `bad-join-code`); `npm test` 61/61 pass af
   URIError: URI malformed
   ```
 
-### 2. Private tables can be joined by omitting the join code entirely — **FIXED 2026-08-26**
+### 2. Private tables can be joined by omitting the join code entirely — **RESOLVED 2026-08-26**
 
 - **Fix:** the guard now reads `String(joinCode || '')` — an absent or empty code no longer falls back
   to the session's own code, so it fails with `bad-join-code` exactly like a wrong code.
