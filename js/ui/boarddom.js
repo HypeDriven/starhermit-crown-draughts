@@ -47,7 +47,7 @@ export class DomBoard {
 
   setState(state) {
     this.state = state;
-    if (this.grid.children.length !== state.size * state.size) this._buildCells(state.size);
+    if (this.grid.children.length !== state.size) this._buildCells(state.size);
     this.render();
   }
 
@@ -56,6 +56,12 @@ export class DomBoard {
     this.grid.style.setProperty('--board-size', size);
     this.cells = [];
     for (let r = 0; r < size; r++) {
+      // role="grid" requires its cells to be owned by rows; the row wrappers are
+      // presentational in the layout (`display: contents`) so the CSS grid is intact.
+      const row = document.createElement('div');
+      row.className = 'dom-board-row';
+      row.setAttribute('role', 'row');
+      this.grid.appendChild(row);
       for (let c = 0; c < size; c++) {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -70,7 +76,7 @@ export class DomBoard {
           btn.disabled = true;
           btn.setAttribute('aria-hidden', 'true');
         }
-        this.grid.appendChild(btn);
+        row.appendChild(btn);
         this.cells.push(btn);
       }
     }

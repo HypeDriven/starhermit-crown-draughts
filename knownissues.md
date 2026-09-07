@@ -195,6 +195,33 @@ mis-attributed external process kill.
   `/css`, `/tests`) return 404; `../`, `%2e%2e%2f` and `....//` traversals are refused by the
   `filePath.startsWith(ROOT)` check at `server.js:577`.
 
+## Later pass — 2026-09-07
+
+A follow-up gameplay/UI review found and fixed nine further defects that the 2026-08-20 pass did not
+cover (they sit above the rules engine, which stayed clean throughout):
+
+1. `Session.undo()` left the rolled-back command id in `seenCommandIds`; since AI command ids are
+   `…:ai:<ply>`, replaying the same ply after an undo looked like a duplicate re-delivery and the AI
+   never moved again — the round froze. Regression test added.
+2. A draw offer against an AI was never answered (the responder was read as `state.turn`, which is
+   still the offering house) and the accept/decline test was sign-inverted. Regression test added.
+3. `config.aiDelayMs` was computed and then ignored, so the AI always waited 350–650 ms.
+4. `Session.restore()` started a second clock interval on top of the constructor's, draining a
+   resumed clocked round at double speed.
+5. `radioGroup()` reused element ids across screens that all stay in the DOM, so `<label for>` on a
+   visible screen targeted a hidden screen's radio.
+6. Pass & Play never re-rendered the commander selector, so 2/3/4 commanders could not be chosen.
+7. The lobby's "90-second turn deadline" toggle was collected and discarded; it now reaches the
+   server's `turnDeadlineMs`.
+8. Daily rating used `config.ai`, which sessions do not set, so every daily scored against a 1000
+   rating regardless of opponent.
+9. Keyboard `Enter`/`Space` fired both the window binding and the focused button's native click, and
+   arrow keys scrolled the page under the board.
+
+Also: settings/profile/progress now merge over defaults one level deep (older saves no longer lose
+nested defaults), the semantic board's `role="grid"` cells are owned by `role="row"` wrappers, and the
+pause menu's duplicate Help button was removed.
+
 ## Not tested
 
 - Real multi-machine hosted play, reconnection over a lossy network, and SSE behaviour beyond what

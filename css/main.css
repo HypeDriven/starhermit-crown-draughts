@@ -296,6 +296,8 @@ button { font-family: inherit; }
   border: 1px solid var(--line);
   max-width: min(92vw, 46vh); aspect-ratio: 1;
 }
+/* ARIA rows own the cells; the grid layout stays flat. */
+.dom-board-row { display: contents; }
 .dom-cell {
   aspect-ratio: 1; border: none; border-radius: 3px; padding: 0;
   font-size: clamp(10px, 2.2vmin, 20px); line-height: 1;

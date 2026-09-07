@@ -121,9 +121,28 @@ export const DEFAULT_PROGRESS = {
 // Public API
 // ---------------------------------------------------------------------------
 
+/**
+ * Merge a stored payload over defaults one level deep, so a save written before
+ * a nested key existed (say `accessibility.haptics`) still gets its default
+ * instead of an undefined that the UI would read as "off".
+ */
+function mergeDefaults(defaults, stored) {
+  const out = structuredClone(defaults);
+  if (!stored || typeof stored !== 'object') return out;
+  for (const [k, v] of Object.entries(stored)) {
+    const base = out[k];
+    if (base && typeof base === 'object' && !Array.isArray(base) && v && typeof v === 'object' && !Array.isArray(v)) {
+      out[k] = { ...base, ...v };
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 export function loadSettings() {
   const doc = readDoc('settings');
-  return doc ? { ...structuredClone(DEFAULT_SETTINGS), ...doc.payload } : structuredClone(DEFAULT_SETTINGS);
+  return mergeDefaults(DEFAULT_SETTINGS, doc?.payload);
 }
 export function saveSettings(settings) {
   const prev = readDoc('settings');
@@ -132,7 +151,7 @@ export function saveSettings(settings) {
 
 export function loadProfile() {
   const doc = readDoc('profile');
-  return doc ? { ...structuredClone(DEFAULT_PROFILE), ...doc.payload } : structuredClone(DEFAULT_PROFILE);
+  return mergeDefaults(DEFAULT_PROFILE, doc?.payload);
 }
 export function saveProfile(profile) {
   const prev = readDoc('profile');
@@ -141,7 +160,7 @@ export function saveProfile(profile) {
 
 export function loadProgress() {
   const doc = readDoc('progress');
-  return doc ? { ...structuredClone(DEFAULT_PROGRESS), ...doc.payload } : structuredClone(DEFAULT_PROGRESS);
+  return mergeDefaults(DEFAULT_PROGRESS, doc?.payload);
 }
 export function saveProgress(progress) {
   const prev = readDoc('progress');

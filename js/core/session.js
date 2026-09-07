@@ -173,17 +173,21 @@ export class Session extends Emitter {
       const thinkMs = Math.round(now() - t0);
       this.emit('ai-decided', { player: player.id, thinkMs });
       this.submit({ ...choice.action, commandId: `${this.id}:ai:${this.state.ply}` }, player.id);
-    }, 350 + Math.floor(Math.random() * 300));
+    }, delay);
   }
 
   _maybeAnswerDrawOffer(action, before) {
     // If a human offered a draw and an AI is now to respond, resolve it.
     if (this.state.phase !== 'active' || !this.state.pendingDraw) return;
-    const responder = this.state.players[this.state.turn];
-    if (!responder || responder.kind !== 'ai') return;
     const offered = this.state.pendingDraw.by;
-    if (responder.id === offered) return;
-    const score = evaluate(this.state); // from responder's perspective
+    // Offering does not pass the turn, so the responder is not `state.turn`:
+    // it is the other house. Only auto-answer when every other live house is AI.
+    const others = this.state.players.filter((p) => !p.eliminated && p.id !== offered);
+    if (!others.length || !others.every((p) => p.kind === 'ai')) return;
+    const responder = others[0];
+    // evaluate() scores from the side to move — still the offering house — so a
+    // large positive score means the responder is the one who is behind.
+    const score = -evaluate(this.state);
     if (score <= -400) {
       this.emit('announce', { text: `${responder.name} accepts the draw.` });
       this.submit({ type: 'acceptDraw', player: responder.id }, responder.id);
@@ -209,7 +213,11 @@ export class Session extends Emitter {
       const prev = deserialize(this.undoStack.pop());
       this.state = prev;
       steps += 1;
-      this.commands.pop();
+      // Retire the rolled-back command id: AI command ids are derived from the
+      // ply, so leaving it behind makes the replayed turn look like a duplicate
+      // re-delivery and the AI never moves again.
+      const dropped = this.commands.pop();
+      if (dropped) this.seenCommandIds.delete(dropped.id);
       this.hashes.pop();
       const pl = this.state.players[this.state.turn];
       if (this.state.phase === 'over' || pl?.kind !== 'ai') break;
@@ -350,6 +358,10 @@ export class Session extends Emitter {
   /** Restore from a snapshot. Returns a "while you were away" summary. */
   static restore(snap) {
     const s = new Session(snap.config);
+    // The constructor already started a clock/AI turn for the *fresh* game; drop
+    // both before adopting the restored state, or the clock ticks twice per tick.
+    if (s._clockTimer) { clearInterval(s._clockTimer); s._clockTimer = null; }
+    if (s._aiTimer) { clearTimeout(s._aiTimer); s._aiTimer = null; s._aiThinking = false; }
     s.id = snap.sessionId;
     s.state = deserialize(snap.state);
     s.commands = snap.commands || [];

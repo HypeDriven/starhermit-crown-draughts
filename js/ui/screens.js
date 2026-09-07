@@ -120,7 +120,12 @@ export function buildLocalSetup(app, root) {
     { value: 'duel', label: RULESETS.duel.name, desc: RULESETS.duel.description },
     { value: 'grand', label: RULESETS.grand.name, desc: RULESETS.grand.description },
     { value: 'melee', label: RULESETS.melee.name, desc: RULESETS.melee.description },
-  ], state.ruleset, (v) => { state.ruleset = v; if (state.count > RULESETS[v].playerCount) state.count = RULESETS[v].playerCount; renderNames(); }));
+  ], state.ruleset, (v) => {
+    state.ruleset = v;
+    if (state.count > RULESETS[v].playerCount) state.count = RULESETS[v].playerCount;
+    renderNames();
+    renderCount();
+  }));
   form.appendChild(nameWrap);
   const meleeCount = el('div', { class: 'melee-count' });
   const renderCount = () => {
@@ -140,12 +145,18 @@ export function buildLocalSetup(app, root) {
   root.replaceChildren(form);
 }
 
+// Every built group gets a fresh name/id prefix. Screens stay in the DOM while
+// hidden, so a reused id would make `<label for>` target the *other* screen's
+// radio and the visible one would never change.
+let radioGroupSeq = 0;
+
 function radioGroup(name, options, current, onChange) {
+  const groupName = `rg${radioGroupSeq++}-${name}`.replace(/\W+/g, '-');
   const fieldset = el('fieldset', { class: 'radio-group' });
   fieldset.appendChild(el('legend', { text: name }));
   for (const opt of options) {
-    const id = `rg-${name}-${opt.value}`.replace(/\W+/g, '-');
-    const input = el('input', { type: 'radio', name, id, value: String(opt.value) });
+    const id = `${groupName}-${opt.value}`.replace(/\W+/g, '-');
+    const input = el('input', { type: 'radio', name: groupName, id, value: String(opt.value) });
     input.checked = opt.value === current;
     input.addEventListener('change', () => onChange(opt.value));
     fieldset.appendChild(el('label', { for: id, class: 'radio-card' }, [

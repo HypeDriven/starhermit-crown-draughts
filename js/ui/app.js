@@ -358,6 +358,7 @@ export class App {
     const res = await HostedSessionClient.create(this.platform, {
       ruleset: state.ruleset, name: this.profile.name, listed: state.listed,
       clockMs: null,
+      turnDeadlineMs: state.clock ? 90000 : null,
     });
     if (!res.ok) return this.ui.toast(res.error || 'Could not create table', 'warn');
     this.hostedClient = res.client;
@@ -578,8 +579,7 @@ export class App {
       box.appendChild(el('div', { class: 'pause-actions' }, [
         button('Resume', () => this._pauseModal?.close(), { kind: 'primary', autofocus: true }),
         button('Settings', () => this.openSettings(), {}),
-        button('Help', () => this.openHelp(), {}),
-        button('How to play', () => this.openHelp(), { kind: 'ghost' }),
+        button('How to play', () => this.openHelp(), {}),
         button('Leave round', async () => {
           const ok = await confirmDialog(this.$overlay, { title: 'Leave this round?', body: 'The round will be saved locally unless it is finished.', confirmLabel: 'Leave' });
           if (ok) { this._pauseModal?.close(); this.exitToTitle(); }
@@ -660,6 +660,15 @@ export class App {
     document.body.dataset.theme = theme;
   }
 
+  /** Show/hide the semantic board and remember the choice for the next round. */
+  toggleDomBoard() {
+    const on = this.$domBoardWrap.classList.toggle('pinned');
+    this.settings.accessibility.domBoard = on;
+    this.saveSettings();
+    this.announce(on ? 'HTML board shown.' : 'HTML board hidden.');
+    return on;
+  }
+
   cycleCamera() {
     const order = ['classic', 'low', 'top'];
     const cur = order.indexOf(this.settings.camera.preset);
@@ -682,7 +691,7 @@ export class App {
     }
     if (action === 'help') { this.openHelp(); return; }
     if (action === 'board') {
-      this.$domBoardWrap.classList.toggle('pinned');
+      this.toggleDomBoard();
       return;
     }
     if (this._screen === 'game' && this.game) {
@@ -856,7 +865,7 @@ export class App {
         button('Offer draw', () => this._offerDraw(), { kind: 'ghost', id: 'btn-draw' }),
         button('Resign', () => this._resign(), { kind: 'ghost', id: 'btn-resign' }),
         button('Camera', () => this.cycleCamera(), { kind: 'ghost' }),
-        button('HTML board', () => this.$domBoardWrap.classList.toggle('pinned'), { kind: 'ghost' }),
+        button('HTML board', () => this.toggleDomBoard(), { kind: 'ghost' }),
       ]),
     ]);
     const playersCard = el('section', { class: 'rail-card' }, [

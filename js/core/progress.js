@@ -49,6 +49,8 @@ export function applyRoundResult(progress, profile, config, over, engineStats) {
   if (config.mode === 'daily' && config.contentId) {
     const dateKey = config.contentId.replace('daily-', '');
     const rec = progress.daily[dateKey] || { completed: false, won: false, score: 0, excluded: false };
+    // The session config carries the opponent on its player entry, not as `ai`.
+    const aiLevelId = config.ai ?? config.players.find((p) => p.kind === 'ai')?.aiLevel;
     if (!rec.completed) {
       rec.completed = true;
       rec.won = won;
@@ -57,13 +59,13 @@ export function applyRoundResult(progress, profile, config, over, engineStats) {
         s.dailyWins += 1;
         s.dailyStreak = s.lastDailyDate === prevDayKey(dateKey) ? s.dailyStreak + 1 : (s.lastDailyDate === dateKey ? s.dailyStreak : 1);
         if (s.dailyStreak > s.bestDailyStreak) s.bestDailyStreak = s.dailyStreak;
-        const aiRating = AI_LEVELS[config.ai]?.rating ?? 1000;
+        const aiRating = AI_LEVELS[aiLevelId]?.rating ?? 1000;
         const d = eloDelta(profile.rating[config.ruleset] ?? 1000, aiRating, 1);
         profile.rating[config.ruleset] = (profile.rating[config.ruleset] ?? 1000) + d;
         out.ratingDelta = d;
       } else {
         s.dailyStreak = 0;
-        const aiRating = AI_LEVELS[config.ai]?.rating ?? 1000;
+        const aiRating = AI_LEVELS[aiLevelId]?.rating ?? 1000;
         const d = eloDelta(profile.rating[config.ruleset] ?? 1000, aiRating, draw ? 0.5 : 0);
         profile.rating[config.ruleset] = (profile.rating[config.ruleset] ?? 1000) + d;
         out.ratingDelta = d;

@@ -81,6 +81,38 @@ test('undo and hint are tracked as assists', async () => {
   s.destroy();
 });
 
+test('the AI keeps playing after an undo rewinds its turn', async () => {
+  const s = new Session(practiceConfig());
+  const settle = async () => {
+    const deadline = Date.now() + 15000;
+    while (s.isAiTurn() && Date.now() < deadline) await wait(15);
+  };
+  s.submit(s.legalTargets()[0], 0);
+  await settle();
+  assert.equal(s.state.ply, 2, 'human move + AI reply');
+  s.undo();
+  assert.equal(s.state.turn, 0, 'back on the human');
+  // A different move replays the same ply — the AI command id must not be
+  // mistaken for a duplicate re-delivery, or the round would freeze here.
+  const acts = s.legalTargets();
+  s.submit(acts[acts.length - 1], 0);
+  await settle();
+  assert.equal(s.state.turn, 0, 'AI answered again');
+  assert.equal(s.state.ply, 2);
+  s.destroy();
+});
+
+test('an AI opponent answers a draw offer instead of leaving it open', async () => {
+  const s = new Session(practiceConfig());
+  const seen = [];
+  s.on('announce', (ev) => seen.push(ev.text));
+  const res = s.submit({ type: 'offerDraw', player: 0 }, 0);
+  assert.ok(res.ok, res.reason);
+  assert.equal(s.state.pendingDraw, null, 'the offer was resolved, not left pending');
+  assert.ok(seen.some((t) => /accepts the draw|declines the draw/.test(t)), seen.join(' | '));
+  s.destroy();
+});
+
 test('undo is refused where the mode forbids it', () => {
   const s = new Session(practiceConfig({ mode: 'challenge', constraints: { noUndo: true, noHints: true } }));
   s.submit(s.legalTargets()[0], 0);

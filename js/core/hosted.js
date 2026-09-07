@@ -30,8 +30,8 @@ export class HostedSessionClient extends Emitter {
     this._unsub = null;
   }
 
-  static async create(platform, { ruleset, name, listed, clockMs }) {
-    const res = await platform.createHostedSession({ ruleset, playerName: name, listed, clockMs });
+  static async create(platform, { ruleset, name, listed, clockMs, turnDeadlineMs = null }) {
+    const res = await platform.createHostedSession({ ruleset, playerName: name, listed, clockMs, turnDeadlineMs });
     if (!res.ok) return { ok: false, error: res.error };
     const client = new HostedSessionClient(platform, res.data);
     return { ok: true, client };

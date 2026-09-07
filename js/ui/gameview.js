@@ -115,7 +115,12 @@ export class GameController {
       const pl = this.state.players[action.piece !== undefined ? this._moverOf(action) : 0];
       this.app.ui.addLogEntry(description);
       this.app.ui.announce(description);
-      if (this.lesson) this._checkLessonGoal(action);
+      // Only the player's own move is judged against the lesson goal; the
+      // opponent's reply must not trigger the "not what this lesson is about" nudge.
+      if (this.lesson && this._lessonCheckPending) {
+        this._lessonCheckPending = false;
+        this._checkLessonGoal(action);
+      }
       // clear selection if it was ours
       this.selected = null;
       this.chainPrefix = [];
@@ -307,8 +312,10 @@ export class GameController {
   }
 
   _stashBefore() {
-    // keep the pre-submit state for lesson goal checks
+    // keep the pre-submit state for lesson goal checks, and mark the next
+    // 'action' event as the one this player caused
     this._lastBefore = this.session.state;
+    this._lessonCheckPending = true;
   }
 
   cancelSelection() {
@@ -398,7 +405,7 @@ export class GameController {
         // keyboard/board navigation implies the semantic board — pin it visible
         const wrap = document.getElementById('dom-board-container');
         if (wrap && !wrap.classList.contains('pinned')) {
-          wrap.classList.add('pinned');
+          this.app.toggleDomBoard();
           this.app.ui.announce('HTML board shown. Arrow keys move the cursor; Enter selects.');
         }
         if (action === 'up') b.moveCursor(1, 0);       // up = toward far edge (r+1)

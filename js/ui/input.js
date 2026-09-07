@@ -107,8 +107,17 @@ export class InputManager {
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
       if (e.code !== 'Escape') return;
     }
+    // Enter/Space on a focused control belongs to that control: the browser
+    // turns it into a click. Handling it here as well would fire the same board
+    // cell twice (select, then an "illegal target" complaint) and would break
+    // keyboard use of the menus.
+    if ((e.code === 'Enter' || e.code === 'Space') && e.target?.closest?.('button, a[href], summary, [role="button"], [role="tab"]')) {
+      return;
+    }
     for (const [action, codes] of Object.entries(this.keyboard)) {
       if (codes.includes(e.code)) {
+        // Arrows and Space otherwise scroll the page out from under the board.
+        if (e.code.startsWith('Arrow') || e.code === 'Space' || e.code === 'F1') e.preventDefault();
         this.onAction(action, { source: 'keyboard', event: e });
         return;
       }
