@@ -501,6 +501,7 @@ export class App {
     if (outcome.stars > 0) this.audio.starAward();
     if (outcome.recordBroken) this.audio.newRecord();
     if (outcome.unlocked?.length) this.audio.achievement();
+    if (outcome.mastery?.length) this.audio.masteryUnlock();
     if (config.mode === 'daily' && outcome.iWon && this.progress.stats.dailyStreak >= 3) this.audio.streak();
     this.announce(`${over.winner === null ? 'Draw' : outcome.iWon ? 'Victory' : 'Round over'}. ${over.reasonText}`, true);
   }
@@ -658,6 +659,12 @@ export class App {
     this.renderer?.setCosmetics(this.settings.cosmetics);
     this.renderer?.setTheme(theme, this.session?.config?.seed || 1);
     document.body.dataset.theme = theme;
+    // the ambience bed and music pad follow the theme once audio is unlocked
+    if (this.audio.ctx && this._audioThemeId !== theme) {
+      this._audioThemeId = theme;
+      this.audio.startAmbience(THEMES[theme]);
+      this.audio.startMusic(THEMES[theme]);
+    }
   }
 
   /** Show/hide the semantic board and remember the choice for the next round. */
@@ -676,6 +683,7 @@ export class App {
     this.settings.camera.preset = next;
     this.saveSettings();
     this.renderer.setCameraPreset(next);
+    this.audio.cameraMove();
     this.ui.toast(`Camera: ${next}`);
   }
 
@@ -727,6 +735,7 @@ export class App {
     const unlock = () => {
       if (this.audio.ensure()) {
         const theme = this._currentThemeObj();
+        this._audioThemeId = theme?.id;
         this.audio.startAmbience(theme);
         this.audio.startMusic(theme);
       }
@@ -1007,6 +1016,11 @@ export class App {
     const row = document.getElementById('clock-row');
     if (!row) return;
     if (!clock) { row.replaceChildren(); return; }
+    // one warning knock when the active clock first drops under ten seconds
+    const active = clock[turn];
+    const low = Number.isFinite(active) && active > 0 && active <= 10000;
+    if (low && !this._clockWarned) { this._clockWarned = true; this.audio.clockWarn(); }
+    else if (!low) this._clockWarned = false;
     row.replaceChildren(...clock.map((ms, i) => {
       const total = Math.max(0, Math.round(ms / 1000));
       const txt = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;

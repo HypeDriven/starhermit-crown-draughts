@@ -1,0 +1,60 @@
+# Crown Draughts — SFX manifest (canonical). One clip per line:
+# file | event id (AudioEngine method in js/core/audio.js, or ambience:<theme id>) | description of the sound | usage context
+# Clips: MOSS-SoundEffect v2.0, 48 kHz mono Opus 96 kbps VBR, loudness-normalised (-20 LUFS). Every event keeps a
+# synthesized fallback in js/core/audio.js, so a missing clip degrades to the synth transient, never to silence.
+# Buses: effects (default), music (win/lose/draw), ambience (amb-* beds). Generator entries live in manifest.json.
+
+# --- board: pieces and rules -------------------------------------------------------------------
+piece-lift.opus | select | Wooden checker lifted off a stone board, faint stone scrape and release | GameController._selectPiece: a legal own piece is selected by tap, click, DOM cell or Enter
+piece-set-down.opus | setDown | Wooden checker set gently back down onto a stone board, soft cushioned tap | GameController.cancelSelection: Escape or an off-board press puts the selected piece back
+piece-slide.opus | move | Wooden checker sliding across a stone board, soft short scrape ending in a quiet knock | Session 'action' event for a quiet (non-capturing) move by either side
+chain-step.opus | chainStep | Wooden checker landing on a stone square mid-hop, one quick soft knock with a faint stone ring | GameController._advanceChain: a jump is committed but the chain must continue (more landings available)
+capture.opus | capture | Wooden checker hopping over another and landing on stone with a firm double knock | 'action' event for a move that captures exactly one piece; also the fallback for houseFall
+multi-jump.opus | multiJump | Three escalating wooden checker landings on stone in a rapid chain | 'action' event for a move that captures two or more pieces (the camera adds a small shake)
+king.opus | crown | A small metal crown placed onto a wooden piece, bright metallic ping then a warm chime | 'action' event whose move ends on the crown row (action.crowns); layered after move/capture
+mandatory-capture-alert.opus | mandatoryCapture | Insistent hollow wooden rattle ending in a low knock, a reprimand | Session 'invalid' with reason must-capture, or selecting a piece with no legal move while a capture exists
+turn-pass.opus | turn | Soft cloth whoosh with a gentle wooden knock, a turn handed over | End of every locally applied action (move, resign, draw offer/answer, timeout)
+opponent-turn.opus | opponentTurn | Distant muted knock of wood on stone, heard across a garden | End of every action replayed from the hosted server (remote flag) instead of turn-pass
+house-fall.opus | houseFall | Several wooden checkers swept off a stone board and tumbling into a wooden tray, cascading clatter ending in a low thud | Royal Melee: a move eliminates a house (its pieces leave the court) while the round continues
+draw-offer.opus | drawOffer | Small ceremonial brass handbell rung once, warm tone with a soft stone-room decay | 'action' event of type offerDraw, from either the player or a remote opponent
+undo.opus | undo | Reversed sliding scrape of wood on stone, quick rewind ending in a tap | GameController.requestUndo after Session.undo succeeds (practice, lesson, journey only)
+hint.opus | hint | Delicate glassy sparkle like sun glinting off a polished tile | Session 'hint' event: the suggested piece is selected and its destinations glow
+
+# --- round flow ----------------------------------------------------------------------------------
+ui-countdown-tick.opus | countdownTick | Dry mallet tap on a stone tile, single dead-stop tick | App._runCountdown: each 3-2-1 step of a clocked round (the "Ready?" step of unclocked rounds)
+round-start.opus | roundStart | Brass bell with a warm rising chime and a single wooden clap | Final countdown step ("Go!" / "Ready?") and entering a hosted round
+ui-timer-warning.opus | clockWarn | Brisk urgent double knock of wood on stone | App._updateClocks: the active player's clock first drops to ten seconds or less (once per crossing)
+ui-pause.opus | pause | Two soft low descending marimba notes, settling | App.togglePause opens the pause overlay (P key, Pause button, tab hidden)
+ui-resume.opus | resume | Two warm ascending marimba notes, waking | Pause overlay closes and the session resumes
+win.opus | win | Short regal bell fanfare with warm resonant chimes | Session 'over' where a human seat is the winner (music bus)
+lose.opus | lose | Slow descending low wooden tones ending in a dull thud | 'over' where the human lost in practice, daily, local or hosted play (music bus)
+level-fail.opus | levelFail | Wooden piece tipping over onto stone followed by a low deflating tone | 'over' where the human lost or failed the goal in a journey stage or challenge
+draw.opus | draw | Two balanced neutral marimba notes ringing over stone | 'over' with no winner: repetition, move limit, agreement (music bus)
+star-award.opus | starAward | Single bright crystalline star chime with a short sparkling tail | Results screen when a journey stage awards one or more stars
+new-record.opus | newRecord | Rising bells and a marimba flourish capped by a bright crown ping | Results screen when a challenge best score is beaten
+streak.opus | streak | Three quick ascending chimes with kindling warmth | Results screen after a Daily win that extends the streak to three days or more
+ui-success.opus | achievement | Bright ascending three-note chime with a regal metallic shimmer | Results screen when an achievement unlocks; lesson step completed ("Well played")
+mastery-unlock.opus | masteryUnlock | Stately unlock fanfare: a stone latch clicking open, a warm rising harp glissando and a single gold bell | Results screen when a mastery-track milestone (cosmetic or title) is claimed
+
+# --- menus and overlays ---------------------------------------------------------------------------
+ui-click.opus | uiClick | Short carved wooden button click, single crisp press on a small hardwood key | Fallback for confirm/back/toggle/tab/slider/panel/settings cues before their clips decode
+ui-hover.opus | hover | Very short soft wooden tick, a fingertip brushing a small wooden bead | Mouse pointer enters a button, select, input, link or tab (pointer only, never touch)
+ui-confirm.opus | uiConfirm | Warm two-note wooden marimba chime, rising | Confirm button of every confirmDialog (offer draw, resign, leave round, adopt synced save)
+ui-back.opus | uiBack | Soft descending wooden tone, two mellow marimba notes falling | Cancel button of confirmDialog; Escape backing out of a menu screen
+ui-modal-open.opus | uiOpen | Soft low whoosh of a cloth panel unfolding with a gentle wooden knock | Any Modal opens (pause, settings, profile, help, confirm); fallback for toast and drawOffer
+ui-panel-close.opus | panelClose | Wooden drawer sliding shut with a cushioned knock | Any Modal closes (button, Escape, backdrop press)
+ui-toggle.opus | toggle | Small wooden toggle switch click, tight and dry | Every checkbox toggle row in Settings and the Lobby
+ui-tab-switch.opus | tabSwitch | Carved wooden tab flicking against stone, snappy single click | Settings tab bar: Audio / Graphics / Controls / Accessibility / Privacy
+ui-slider-drag.opus | sliderDrag | Wooden peg sliding along a shallow stone groove | Volume sliders in Settings → Audio, on every input event
+ui-scroll-tick.opus | scrollTick | Small wooden ratchet tick, one notch | Board cursor moved one playable square with the arrow keys, WASD, d-pad or stick
+ui-settings-saved.opus | settingsSaved | Wooden stamp pressed firmly onto thick paper, single thump | Profile display name saved
+ui-toast.opus | toast | Gentle ceramic bell pop with a warm short shimmer | Non-warning toast appears (info/ok); warning toasts stay silent because their cause already sounded
+ui-error.opus | invalid | Muted short double knock on a wooden panel, flat and denied | Session 'invalid' for every reason except must-capture; pressing an enemy piece or an illegal square
+camera-move.opus | cameraMove | Soft airy whoosh of a slow glide through garden air, a gentle breath of wind | App.cycleCamera: C key, Camera button or gamepad stick click switches classic / low / top
+
+# --- ambience beds (ambience bus, looped at gain 0.35; synthesized wind/birds/water carry the scene until decoded) ---
+amb-royal-garden.opus | ambience:royal-garden | Peaceful daytime formal garden: breeze through hedges, distant songbirds, a small stone fountain trickling, seamless loop | AudioEngine._startAmbienceLoop while the Royal Garden theme is active
+amb-dusk-conservatory.opus | ambience:dusk-conservatory | Warm dusk garden: steady crickets, light breeze, distant fountain trickle, faint lantern flicker, seamless loop | Ambience loop for the Dusk Conservatory theme
+amb-ember-court.opus | ambience:ember-court | Autumn courtyard at evening: braziers crackling, dry leaves in a steady breeze, one distant bird, seamless loop | Ambience loop for the Ember Court theme
+amb-frost-arbor.opus | ambience:frost-arbor | Quiet winter garden: cold wind through bare branches, snowfall hush, an occasional distant crow, seamless loop | Ambience loop for the Frost Arbor theme
+amb-tide-terrace.opus | ambience:tide-terrace | Seaside terrace: soft waves on stone below, sea breeze, far gulls, a fountain splashing gently, seamless loop | Ambience loop for the Tide Terrace theme

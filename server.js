@@ -436,6 +436,7 @@ const MIME = {
   '.json': 'application/json',
   '.txt': 'text/plain; charset=utf-8',
   '.png': 'image/png',
+  '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
@@ -595,6 +596,8 @@ export async function startDevServer({ port = 8080, dataFile = DATA_FILE, quiet 
     let rel = safeDecode(path);
     if (rel === null) return send(res, 400, { error: 'bad-encoding' });
     if (rel === '/') rel = '/index.html';
+    // tests, dev tooling and dotfiles (including the dev data file) are never served
+    if (/^\/(tests|tools)(\/|$)|\/\./.test(rel)) return send(res, 404, { error: 'not-found' });
     const filePath = normalize(join(ROOT, rel));
     if (!filePath.startsWith(ROOT)) return send(res, 403, { error: 'forbidden' });
     try {

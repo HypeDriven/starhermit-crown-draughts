@@ -166,7 +166,12 @@ const dailyOk = await page.evaluate(() => {
 check('daily starts ranked', dailyOk);
 await page.evaluate(() => { globalThis.__crownDraughts.session.submit({ type: 'resign', player: 0 }, 0); });
 await page.waitForFunction(() => document.body.dataset.screen === 'results', { timeout: 8000 });
-const ratingOk = await page.evaluate(() => globalThis.__crownDraughts.profile.rating.duel !== 1000);
+// the daily ruleset rotates by day (duel/duel/grand), so check the rating
+// bucket the round actually wrote
+const ratingOk = await page.evaluate(() => {
+  const ruleset = globalThis.__crownDraughts.session.config.ruleset;
+  return globalThis.__crownDraughts.profile.rating[ruleset] !== 1000;
+});
 check('daily result changes rating', ratingOk);
 
 // journey stage 1 starts with its authored content id

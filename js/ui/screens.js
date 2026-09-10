@@ -20,6 +20,10 @@ export function buildTitle(app, root) {
   const resume = app.pendingSnapshot();
   root.replaceChildren(
     el('div', { class: 'title-block' }, [
+      el('img', {
+        class: 'title-emblem', src: 'assets/title-emblem.webp', alt: '', width: '112', height: '112',
+        decoding: 'async', onerror: (e) => e.target.remove(),
+      }),
       el('h1', { class: 'game-title', text: 'Crown Draughts' }),
       el('p', { class: 'tagline', text: 'A carved stone board in a royal garden.' }),
     ]),
@@ -445,6 +449,15 @@ export function buildResults(app, root, { over, config, outcome }) {
   const headline = goalMissed ? 'Goal Missed'
     : over.winner === null ? 'A Truce'
     : (outcome.iWon ? 'Victory' : (outcome.localMultiplayer ? `${over.winnerName || 'A house'} wins` : 'Defeat'));
+  // illustration: a crowned stone for a decided round, a fallen stone for a defeat; truces show none
+  const banner = over.winner === null ? null
+    : (goalMissed || (!outcome.iWon && !outcome.localMultiplayer)) ? 'results-defeat' : 'results-victory';
+  if (banner) {
+    wrap.appendChild(el('img', {
+      class: 'result-banner', src: `assets/${banner}.webp`, alt: '', width: '896', height: '384',
+      decoding: 'async', onerror: (e) => e.target.remove(),
+    }));
+  }
   wrap.appendChild(el('h2', { class: `result-headline ${goalMissed ? 'loss' : over.winner === null ? 'draw' : outcome.iWon ? 'win' : 'loss'}`, text: headline }));
   wrap.appendChild(el('p', { class: 'result-reason', text: over.reasonText }));
   // score breakdown — components, never one unexplained total

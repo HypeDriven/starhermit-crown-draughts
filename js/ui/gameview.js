@@ -91,13 +91,18 @@ export class GameController {
     this._syncDomTargets();
   }
 
-  _onAction({ action, description, remote }) {
+  _onAction({ action, description, remote, before, after }) {
     const audio = this.app.audio;
     if (action.type === 'move') {
       if (action.captures.length >= 2) audio.multiJump();
       else if (action.captures.length) audio.capture();
       else audio.move();
       if (action.crowns) audio.crown();
+      // a house leaving the court mid-round (melee): local sessions carry
+      // before/after snapshots on the event; hosted replays do not
+      const elimBefore = before?.players?.filter((p) => p.eliminated).length ?? 0;
+      const elimAfter = after?.players?.filter((p) => p.eliminated).length ?? elimBefore;
+      if (elimAfter > elimBefore && after?.phase === 'active') audio.houseFall();
       if (action.captures.length && this.app.settings.accessibility.haptics) {
         try { navigator.vibrate?.(30); } catch { /* unsupported */ }
       }
@@ -126,6 +131,7 @@ export class GameController {
       this.chainPrefix = [];
       this.candidates = [];
     } else {
+      if (action.type === 'offerDraw') audio.drawOffer();
       this.app.ui.addLogEntry(description);
       this.app.ui.announce(description);
     }
@@ -301,7 +307,7 @@ export class GameController {
       return;
     }
     if (longer.length > 0) {
-      this.app.audio.move();
+      this.app.audio.chainStep();
       this.app.ui.announce(`Chain continues — ${longer.length} follow-up ${longer.length === 1 ? 'jump' : 'jumps'} available.`);
       this.candidates = [...longer, ...complete.filter((a) => longer.length === 0)];
       this._refreshSelection();
@@ -323,7 +329,7 @@ export class GameController {
       this.selected = null;
       this.chainPrefix = [];
       this.candidates = [];
-      this.app.audio.uiClick();
+      this.app.audio.setDown();
       this._refreshSelection();
       return true;
     }
@@ -412,6 +418,7 @@ export class GameController {
         else if (action === 'down') b.moveCursor(-1, 0);
         else if (action === 'left') b.moveCursor(0, -1);
         else b.moveCursor(0, 1);
+        this.app.audio.scrollTick();
         return true;
       }
       case 'confirm': {

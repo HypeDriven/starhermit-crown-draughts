@@ -3,6 +3,15 @@
 // pad. Four buses (music / effects / ambience / voice) with independent
 // gains; suspends when hidden; no audio-only gameplay information.
 
+/** Authored ambience beds per theme (sfx/manifest.txt events `ambience:<theme>`). */
+const AMBIENCE_BEDS = {
+  'royal-garden': 'amb-royal-garden',
+  'dusk-conservatory': 'amb-dusk-conservatory',
+  'ember-court': 'amb-ember-court',
+  'frost-arbor': 'amb-frost-arbor',
+  'tide-terrace': 'amb-tide-terrace',
+};
+
 export class AudioEngine {
   constructor() {
     this.ctx = null;
@@ -207,6 +216,15 @@ export class AudioEngine {
   newRecord() { if (!this._sfx('new-record')) this.achievement(); }
   streak() { if (!this._sfx('streak')) this.achievement(); }
 
+  // Board and menu events added with the authored clip set; each keeps a
+  // synth-era fallback so the cue always sounds even when the clip is missing.
+  chainStep() { if (!this._sfx('chain-step')) this.move(); }
+  setDown() { if (!this._sfx('piece-set-down')) this.uiClick(); }
+  drawOffer() { if (!this._sfx('draw-offer')) this.uiOpen(); }
+  houseFall() { if (!this._sfx('house-fall')) this.capture(); }
+  cameraMove() { if (!this._sfx('camera-move')) this.hover(); }
+  masteryUnlock() { if (!this._sfx('mastery-unlock')) this.achievement(); }
+
   /** Optional spoken cue (voice bus). Text is short and already localized by UI. */
   speak(text) {
     if (!this.settings.voiceCues) return;
@@ -248,6 +266,7 @@ export class AudioEngine {
     src.connect(f).connect(g).connect(this.buses.ambience);
     src.start();
     this._ambNodes.push(src, g);
+    this._ambSynth = [g];
     // birds: gentle chirp scheduler
     if ((amb.birds ?? 0) > 0.05) {
       const chirp = () => {
@@ -279,7 +298,45 @@ export class AudioEngine {
       src2.connect(f2).connect(g2).connect(this.buses.ambience);
       src2.start();
       this._ambNodes.push(src2, g2);
+      this._ambSynth.push(g2);
     }
+    // authored bed for the theme; the synthesized layers carry the scene
+    // until it is decoded and stay as the fallback when it is missing
+    this._startAmbienceLoop(theme?.id || 'royal-garden');
+  }
+
+  /** Loop `sfx/amb-<theme>.opus` on the ambience bus (event `ambience:<theme>`).
+   *  When it starts, the synthesized wind/water fade out and the bird
+   *  scheduler stops so the two beds never stack. */
+  _startAmbienceLoop(themeId) {
+    const name = AMBIENCE_BEDS[themeId];
+    if (!name) return;
+    const gen = (this._ambGen = (this._ambGen || 0) + 1);
+    let tries = 0;
+    const tryStart = () => {
+      if (!this.ctx || gen !== this._ambGen) return;
+      const buf = this._buffers.get(name);
+      if (buf === undefined) {
+        this._loadSample(name);
+        if (tries++ < 60) setTimeout(tryStart, 400);
+        return;
+      }
+      if (buf === null) return; // no clip: keep the synthesized bed
+      try {
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        const g = this.ctx.createGain();
+        g.gain.value = 0.35;
+        src.connect(g).connect(this.buses.ambience);
+        src.start();
+        this._ambNodes.push(src, g);
+        const t = this.ctx.currentTime;
+        for (const n of this._ambSynth || []) n.gain.linearRampToValueAtTime(0.0001, t + 1.5);
+        clearTimeout(this._birdTimer);
+      } catch { /* keep the synthesized bed */ }
+    };
+    tryStart();
   }
 
   stopAmbience() {
