@@ -209,7 +209,12 @@ export class RenderFacade {
   loadState(state, { snap = true, seed = 1 } = {}) {
     this._lastState = state;
     if (!this.ok) return;
-    if (this.board && this.board.size === state.size && this._boardPlayers === state.players.map((p) => p.color).join()) {
+    // Reuse the board only for the same population of pieces (same ids);
+    // a new setup (lesson, puzzle, attract board) rebuilds so absent pieces
+    // never linger and new ones always exist.
+    const pieceKey = state.pieces.map((p) => p.id).sort().join(',');
+    if (this.board && this.board.size === state.size && this._boardPlayers === state.players.map((p) => p.color).join()
+        && this._boardPieces === pieceKey) {
       this.board.syncState(state);
       return;
     }
@@ -217,6 +222,7 @@ export class RenderFacade {
     this.board = new BoardView(this.scene, THEMES[this.themeId]);
     this.board.buildFor(state);
     this._boardPlayers = state.players.map((p) => p.color).join();
+    this._boardPieces = pieceKey;
     this.rig.setBoardSize(state.size);
     this.rig.goTo(this.rig.preset, snap);
   }

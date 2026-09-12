@@ -99,6 +99,7 @@ export class App {
     this.$railLeft = document.getElementById('rail-left');
     this.$railRight = document.getElementById('rail-right');
     this.$tray = document.getElementById('tray-bottom');
+    window.addEventListener('resize', () => this._placeCoach());
     this.$domBoardWrap = document.getElementById('dom-board-container');
   }
 
@@ -902,13 +903,46 @@ export class App {
     ]);
     this.$railRight.replaceChildren(...[actionsCard, playersCard, hosted ? chatCard : null].filter(Boolean));
     // bottom tray mirrors key actions on small screens
+    const drawerBtn = (label, cls) => button(label, () => {
+      const other = cls === 'rail-left-open' ? 'rail-right-open' : 'rail-left-open';
+      document.body.classList.remove(other);
+      document.body.classList.toggle(cls);
+      this._syncDrawerButtons();
+    }, { kind: 'ghost', class: 'btn btn-ghost drawer-btn', 'aria-expanded': 'false', 'data-drawer': cls });
     this.$tray.replaceChildren(
+      drawerBtn('Info', 'rail-left-open'),
       button('Undo', () => this.game?.requestUndo(), { kind: 'ghost' }),
       button('Hint', () => this.game?.requestHint(), { kind: 'ghost' }),
       button('Draw', () => this._offerDraw(), { kind: 'ghost' }),
       button('Pause', () => this.togglePause(true), { kind: 'ghost' }),
+      drawerBtn('Actions', 'rail-right-open'),
     );
+    document.body.classList.remove('rail-left-open', 'rail-right-open');
+    this._syncDrawerButtons();
+    this._placeCoach();
     this.ui.updateHud({ state: s.state, session: s, config: s.config });
+  }
+
+  _syncDrawerButtons() {
+    for (const b of this.$tray.querySelectorAll('[data-drawer]')) {
+      b.setAttribute('aria-expanded', String(document.body.classList.contains(b.dataset.drawer)));
+    }
+  }
+
+  /**
+   * On compact layouts the lesson coach (and its Continue button) lives in a
+   * persistent dock over the board rather than inside the collapsed rail.
+   */
+  _placeCoach() {
+    const coach = document.getElementById('lesson-coach');
+    const dock = document.getElementById('coach-dock');
+    if (!coach || !dock) return;
+    const compact = matchMedia('(max-width: 1023px), (max-height: 560px) and (orientation: landscape)').matches;
+    const target = compact ? dock : this.$railLeft;
+    if (coach.parentElement !== target) {
+      if (compact) target.appendChild(coach); else target.prepend(coach);
+    }
+    dock.hidden = !compact || coach.hidden;
   }
 
   async _offerDraw() {
@@ -1048,6 +1082,7 @@ export class App {
   _lessonStepComplete(step) {
     this.audio.achievement();
     const coach = document.getElementById('lesson-coach');
+    this._placeCoach();
     if (coach) {
       coach.replaceChildren(
         el('h3', { text: 'Well played' }),
