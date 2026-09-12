@@ -10,7 +10,7 @@ import { HostedSessionClient } from '../core/hosted.js';
 import {
   loadSettings, saveSettings, loadProfile, saveProfile, loadProgress, saveProgress,
   loadProgressDoc, adoptProgressDoc, loadCloudSave, writeCloudSave, compareSaves, archiveSave,
-  saveSessionSnapshot, loadSessionSnapshot, clearSessionSnapshot,
+  saveSessionSnapshot, loadSessionSnapshot, clearSessionSnapshot, adoptCloudSaveDoc,
 } from '../core/storage.js';
 import { applyRoundResult } from '../core/progress.js';
 import { dailyDefinition } from '../content/daily.js';
@@ -60,6 +60,22 @@ export class App {
     this.applyTheme();
     await this.platform.init();
     this.platform.setTelemetryConsent(this.settings.telemetryConsent === true);
+    // Hosted: the account nickname replaces the local guest name, and the
+    // cloud slot seeds the synced save before the conflict check runs.
+    if (this.platform.hosted) {
+      this.platform.fetchProfile().then((prof) => {
+        if (prof?.name) {
+          this.profile.name = prof.name;
+          saveProfile(this.profile);
+          if (this._screen === 'title') this.go('title');
+        }
+      }).catch(() => {});
+      this.platform.loadCloudSave().then((raw) => {
+        if (!raw) return;
+        try { adoptCloudSaveDoc(JSON.parse(raw)); } catch { /* corrupt remote */ }
+        this._syncCloudSave();
+      }).catch(() => {});
+    }
     this._wireLifecycle();
     this._applyTextSize();
     // idle attract board behind the title
@@ -372,10 +388,14 @@ export class App {
     });
   }
 
-  async joinByCode(code) {
-    if (!code || code.length < 4) return this.ui.toast('Enter the 6-letter join code.', 'warn');
-    const res = await HostedSessionClient.join(this.platform, { sessionIdOrCode: code, name: this.profile.name, joinCode: code });
-    if (!res.ok) return this.ui.toast(res.error || 'Could not join', 'warn');
+  async quickJoinTable() {
+    // Realtime rooms quick-join: any open table for this game.
+    const res = await HostedSessionClient.join(this.platform, { name: this.profile.name });
+    if (!res.ok) {
+      return this.ui.toast(res.error === 'no-open-tables'
+        ? 'No open tables right now — host one, or accept a friend invite.'
+        : (res.error || 'Could not join'), 'warn');
+    }
     this.hostedClient = res.client;
     this.hostedClient.connect();
     this._wireHostedOver();
@@ -386,32 +406,15 @@ export class App {
     });
   }
 
-  async refreshOpenTables(listWrap) {
-    const res = await this.platform.listPublicSessions();
-    if (!res.ok) {
-      listWrap.replaceChildren(el('p', { text: 'Could not load open tables.', class: 'setup-note warn' }));
-      return;
-    }
-    const rows = res.data.sessions || [];
-    if (!rows.length) {
-      listWrap.replaceChildren(el('p', { text: 'No open tables right now — host one!', class: 'setup-note' }));
-      return;
-    }
-    listWrap.replaceChildren(...rows.map((s) => el('div', { class: 'open-table' }, [
-      el('span', { text: `${RULESETS[s.ruleset].name} · ${s.seats}/${s.capacity} · host rating ${s.hostRating}` }),
-      button('Join', async () => {
-        const res2 = await HostedSessionClient.join(this.platform, { sessionIdOrCode: s.id, name: this.profile.name, joinCode: null });
-        if (!res2.ok) return this.ui.toast(res2.error || 'Could not join', 'warn');
-        this.hostedClient = res2.client;
-        this.hostedClient.connect();
-        this._wireHostedOver();
-        await this.hostedClient.refresh();
-        this.go('table-room', this.hostedClient);
-        this.hostedClient.on('state', () => {
-          if (this.hostedClient.phase === 'active' && this._screen !== 'game') this._enterHostedGame();
-        });
-      }),
-    ])));
+  async refreshOpenTables() {
+    // The rooms API has no public listing; quick-join replaces browsing.
+    return this.quickJoinTable();
+  }
+
+  async joinByCode() {
+    // Join codes belonged to the old dev-server protocol. On the platform,
+    // private tables are friend invites; open tables use quick-join.
+    return this.ui.toast('Private tables arrive as friend invites — open tables fill from Hosted play.', 'warn');
   }
 
   _wireHostedOver() {

@@ -15,8 +15,8 @@
 | `js/rules/ai.js` | Deterministic negamax with quiescence, four named levels, `hintAction`. |
 | `js/rules/rng.js` | mulberry32 PRNG, FNV-1a hashing, `seedFromString`, forkable `createRng`. |
 | `js/core/session.js` | One live local round: command pipeline, AI driver, clocks, undo/hint, draw answers, snapshots, replay envelope, `verifyReplay`. |
-| `js/core/hosted.js` | `HostedSessionClient`: same event surface as `Session` over REST + SSE. |
-| `js/core/platform.js` | Host detection, `/api/v1/time` sync, retrying REST, presence, consent-gated telemetry, SSE/poll subscription. |
+| `js/core/hosted.js` | `HostedSessionClient`: same event surface as `Session` over realtime rooms (host-routed): the host seat runs the local engine and broadcasts snapshots; guests send their action JSON as binary frames. |
+| `js/core/platform.js` | Fragment launch-token read + Bearer + 45-min refresh, `/api/v1/time` sync, retrying REST, profile nickname, cloud-save slot (zip+base64), realtime-rooms REST + the `ws/v1/realtime` socket (16-byte sender prefix stripped). |
 | `js/core/storage.js` | Versioned, checksummed localStorage documents: settings, profile, progress, cloud-save mirror, session snapshot, local boards. |
 | `js/core/progress.js` | Folds a finished round into progress: stars, streaks, records, rating, mastery, achievements. |
 | `js/core/audio.js` | Four-bus WebAudio engine: authored `sfx/*.opus` clips with synthesized fallbacks, generative music pad, ambience beds. |
@@ -261,13 +261,13 @@ The shipped build is English only: every string is a literal in `js/ui/*.js`, `j
 Conventions follow https://wiki.starhermit.com/ (manifest, launch token, `/api/v1/time`, game script).
 
 - **Packaging:** `starhermit.txt` with `name`, `launch=index.html`, `owner`, `server=server.js`, `cover=coverart.png`, `version`, `ruleset-engine`, `content-version`. `tests/` and `tools/` are dev-only; the dev server refuses to serve them and any dotfile.
-- **Launch and identity:** `Platform.init` reads `launch_token` from the query string and `globalThis.__STARHERMIT__.accountToken` when the host shell injects it; both are sent as headers on every API call and never persisted. Without a host the profile is a local "Guest Gardener" with an editable name and avatar colour.
+- **Launch and identity:** `Platform.init` reads `#game_token=<jwt>` from the URL fragment (optional `&session_id=`, stripped after the read; query forms for local dev), decodes `sub` + `game_scope` (never hard-coded), sends the token as `Authorization: Bearer` on every API call, and re-mints it every 45 min via `POST /api/v1/games/{slug}/launch-token` (60 s retry). Hosted mode activates whenever a token exists. The profile name is the platform nickname from `GET /api/v1/users/{sub}/profile` (never usernames, never `/api/v1/me`); standalone keeps the local "Guest Gardener". Tokens are never persisted.
 - **Time:** `GET /api/v1/time` is probed once at boot; the round-trip-adjusted offset drives `serverNow()`, the daily countdown and presence timestamps.
-- **Presence:** `POST /api/v1/presence` every 45 s while in a hosted round, `idle` on leave.
-- **Telemetry:** consent-gated (banner at first boot, Settings → Privacy), six categories only (`start`, `tutorial_step`, `round_end`, `retry`, `settings_change`, `error`), coarse string props whitelisted by key, batched to `POST /api/v1/telemetry`, dropped when offline.
-- **Cloud save:** progress is a versioned, FNV-checksummed document; `compareSaves` classifies local vs cloud as same / local-ahead / cloud-ahead / conflict by ancestry, archives both on conflict and asks the player which to keep. The "cloud" copy is today a second localStorage document — see intent.
-- **Sessions and game script:** `server.js` exports `createAuthoritativeEngine({ now, persist })`, the sandbox-shaped script: create/list/join (6-char join codes, listed tables), host-only start, per-seat tokens, turn and seat binding, 12 commands per 10 s, idempotent command ids, 4 KB payload cap, 10 chat messages per minute (240 chars), reports, replays with hash chains, away detection (45 s), turn deadlines (`timeout` action), abandonment (5 min → remaining player wins), Elo on two-seat tables. The `--dev` harness serves the same engine over `/api/v1/sessions…` with SSE (`/events`) and REST snapshots as the reconnect source of truth. `Platform.online` is true only when that harness answers on localhost; the lobby otherwise offers Pass & Play instead.
-- **Not used:** leaderboards, achievement or rating submission to the platform, friends and invitations, voice rooms, WebSocket transport, host settings storage. Achievements, ratings and boards are local documents.
+- **Presence / telemetry:** no per-game presence or telemetry endpoints exist for launch tokens (wiki); both are inert no-ops with the consent toggle retained.
+- **Multiplayer:** realtime rooms, host-routed. Host: `POST /api/v1/realtime/rooms` (one team, `seatsPerTeam` from the ruleset, metadata, empty seats play as `apprentice` AI at start), `POST /rooms/{id}/open` to list publicly. Guest: `POST /rooms/quick-join` (`{gameSlug, seats:1}`; 404 → "no open tables"). Transport `ws(s)://<host>/ws/v1/realtime?roomId=&access_token=` — binary frames carry the 16-byte sender prefix (stripped on receipt; guest→host, host→everyone; 8 KB cap), text frames are server control (roster/presence). The host runs the authoritative `Session` locally, broadcasts serialized snapshots, validates guest inputs (`move`/`resign`/`offerDraw`/…) through the same engine, relays chat with attribution, reports via `POST /rooms/{id}/result`, leaves via `POST /rooms/{id}/leave`; guests reconnect via `GET /rooms/mine` and friend invites use `GET /api/v1/me/friends` + `POST /rooms/{id}/invites` (`GET /rooms/invites` to poll). Join codes and public browsing do not exist on the platform — the lobby quick-joins open tables and says so.
+- **Cloud save:** progress is a versioned, FNV-checksummed document; `compareSaves` classifies local vs cloud as same / local-ahead / cloud-ahead / conflict by ancestry, archives both on conflict and asks the player which to keep. The cloud copy travels through the real platform slot `GET/PUT /api/v1/me/cloud-saves/{slug}` (zip+base64, debounced with a pagehide flush; the local document is the offline cache).
+- **Game script:** `server.js` exports `createAuthoritativeEngine({ now, persist })` — the authoritative-engine shape used by the dev harness (`--dev`) and the node tests; hosted play itself is host-routed over realtime rooms (above) and does not call the script over HTTP.
+- **Not used:** platform leaderboards, achievement or rating submission, voice rooms, host settings storage. Achievements, ratings and boards are local documents.
 
 ## 12. Technical architecture
 
@@ -309,7 +309,7 @@ QA bar (checkable): every mode reachable from the visible UI on desktop and phon
 ## 15. Known limitations
 
 - **English only** (§9).
-- **Hosted play needs this game's own dev server.** Under a StarHermit host shell `Platform.online` is false, so the lobby falls back to Pass & Play; nothing is submitted to platform leaderboards or achievements, and the cloud save is a local mirror.
+- Hosted tables are host-routed over realtime rooms and untestable against a real host locally; report-a-player has no rooms equivalent and returns an honest unsupported; guest reconnect relies on `GET /rooms/mine` plus fresh snapshots. Offline Pass & Play and local AI are unchanged.
 - **Tablet rails are unreachable.** Between 761 and 1023 px wide the rails slide off-screen and no control adds `rail-left-open` / `rail-right-open`; the tray covers Undo, Hint, Draw and Pause, but Resign, Camera, HTML board, Houses, Moves and hosted chat need keys (C, B) or a wider window.
 - **Move-limit failure reads as a truce.** `Session._forceEnd(null, 'move-limit-failed')` has no `TERMINAL_REASON_TEXT` entry, so results show "A Truce — move-limit-failed" with the draw sound; progress correctly records no completion.
 - **Achievement name mismatch:** "Seven Sunrises" unlocks at five daily wins.
@@ -322,7 +322,7 @@ QA bar (checkable): every mode reachable from the visible UI on desktop and phon
 ## Design intent not yet implemented
 
 - Ship the nine required locales (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT) through a string table, chosen from the host profile or `navigator.language`, with 30 % expansion allowance.
-- Hosted play against the real StarHermit Games API (sessions, invitations, matchmaking) instead of the localhost harness; platform leaderboards and achievement submission; a true cloud-save endpoint.
+- Platform leaderboards and achievement submission; voice rooms; friend-invite acceptance UI in the lobby.
 - A drawer toggle for the rails on tablet widths, and a truce illustration on results.
 - Author `TERMINAL_REASON_TEXT['move-limit-failed']` and play `levelFail` for it.
 - Theme-specific music roots already exist per theme; a dedicated authored intensity stem for endgames is intended.

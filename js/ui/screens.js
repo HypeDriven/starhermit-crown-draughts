@@ -731,17 +731,13 @@ export function buildLobby(app, root) {
     }, { kind: 'primary' }),
   ]);
   wrap.appendChild(hostRow);
-  wrap.appendChild(el('h3', { text: 'Join with a code' }));
-  const codeInput = el('input', { type: 'text', class: 'text-input code-input', maxlength: '6', placeholder: 'ABC123', 'aria-label': 'Join code' });
-  codeInput.addEventListener('input', () => { state.joinCode = codeInput.value.toUpperCase(); });
-  wrap.appendChild(el('div', { class: 'join-row' }, [codeInput, button('Join', () => app.joinByCode(state.joinCode))]));
-  wrap.appendChild(el('h3', { text: 'Open tables' }));
-  const listWrap = el('div', { class: 'open-tables' });
-  wrap.appendChild(listWrap);
-  wrap.appendChild(button('Refresh list', () => app.refreshOpenTables(listWrap), { kind: 'ghost' }));
+  wrap.appendChild(el('h3', { text: 'Join a table' }));
+  wrap.appendChild(el('div', { class: 'setup-actions' }, [
+    button('Join an open table', async () => { await app.quickJoinTable(); }, { kind: 'primary' }),
+  ]));
+  wrap.appendChild(el('p', { class: 'setup-note', text: 'Open tables fill instantly. Private tables arrive as friend invites from the host shell — there are no join codes on the platform.' }));
   wrap.appendChild(el('div', { class: 'setup-actions' }, [button('Back', () => app.go('modes'), { kind: 'ghost' })]));
   root.replaceChildren(wrap);
-  app.refreshOpenTables(listWrap);
 }
 
 export function buildTableRoom(app, root, client) {

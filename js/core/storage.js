@@ -175,16 +175,29 @@ export function adoptProgressDoc(doc) {
   writeRaw('progress', JSON.stringify(doc));
 }
 
-// --- Cloud-save emulation ---------------------------------------------------
-// The "cloud" document mirrors progress with an ancestor chain. When the game
-// is hosted, the platform adapter syncs this document to the host; offline it
-// stays local. Conflict detection works the same either way.
+// --- Cloud save -------------------------------------------------------------
+// The "cloud" document mirrors progress with an ancestor chain, used by the
+// conflict UI. The transport is the REAL platform slot: when hosted, the
+// platform adapter (js/core/platform.js) mirrors this document to
+// GET/PUT /api/v1/me/cloud-saves/{slug} (zip+base64, debounced, pagehide
+// flush) and the app seeds the local copy from the slot at boot; offline the
+// document stays local, exactly as before.
 
 export function loadCloudSave() {
   return readDoc('cloudsave');
 }
+/** Adopt a synced cloud document fetched from the platform slot. */
+export function adoptCloudSaveDoc(doc) {
+  writeRaw('cloudsave', JSON.stringify(doc));
+}
 export function writeCloudSave(progress, parentId) {
-  return writeDoc('cloudsave', progress, parentId);
+  const doc = writeDoc('cloudsave', progress, parentId);
+  // Mirror to the platform slot when hosted (debounced there).
+  try {
+    const p = globalThis.window?.CBPlatform || globalThis.CBPlatform;
+    if (p && p.hosted) p.writeCloudSave(JSON.stringify(doc));
+  } catch { /* mirror errors never break saves */ }
+  return doc;
 }
 
 /**
