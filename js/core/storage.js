@@ -4,6 +4,7 @@
 // private chat are ever placed in saves.
 
 import { fnv1aHex } from '../rules/rng.js';
+import { DEFAULT_GRAPHICS, migrateGraphics } from '../render/gfx.js';
 
 const PREFIX = 'crown-draughts:';
 const SAVE_VERSION = 1;
@@ -78,7 +79,7 @@ function writeDoc(key, payload, parentId = null) {
 export const DEFAULT_SETTINGS = {
   v: 1,
   audio: { music: 0.7, effects: 0.9, ambience: 0.6, voice: 0.8, muted: false, voiceCues: false },
-  graphics: { tier: 'auto', renderScale: 1.0 },       // tier: auto|high|medium|low
+  graphics: { ...DEFAULT_GRAPHICS },                  // preset auto|low|balanced|high|ultra, render_scale, adaptive, show_fps, per-category overrides (see render/gfx.js)
   accessibility: {
     reducedMotion: false, highContrast: false, colorPalette: 'default', // default|deuteranopia|protanopia|tritanopia
     largeText: false, leftHanded: false, holdToConfirm: false, timingAssist: false,
@@ -142,7 +143,9 @@ function mergeDefaults(defaults, stored) {
 
 export function loadSettings() {
   const doc = readDoc('settings');
-  return mergeDefaults(DEFAULT_SETTINGS, doc?.payload);
+  const out = mergeDefaults(DEFAULT_SETTINGS, doc?.payload);
+  out.graphics = migrateGraphics(doc?.payload?.graphics);
+  return out;
 }
 export function saveSettings(settings) {
   const prev = readDoc('settings');

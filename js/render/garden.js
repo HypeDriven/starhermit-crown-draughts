@@ -17,6 +17,8 @@ export class Garden {
     this.group.traverse?.((o) => o.layers?.set(LAYER_ENV));
     scene.add(this.group);
     this.disposables = [];
+    this.reducedMotion = false;
+    this.leaves = [];
     this.build(theme, seed);
   }
 
@@ -94,7 +96,10 @@ export class Garden {
           leaf.scale.setScalar(0.8 + rng.next() * 0.5);
           leaf.castShadow = true;
           leaf.layers.set(LAYER_ENV);
+          leaf.userData.base = leaf.position.clone();
+          leaf.userData.phase = rng.next() * Math.PI * 2;
           g.add(leaf);
+          this.leaves.push(leaf);
         }
       }
     }
@@ -114,8 +119,8 @@ export class Garden {
       pillar.layers.set(LAYER_ENV);
       g.add(pillar);
       this.water = new THREE.Mesh(
-        new THREE.CircleGeometry(1.55, 24),
-        new THREE.MeshStandardMaterial({ color: t.water, roughness: 0.15, metalness: 0.4, transparent: true, opacity: 0.9 }),
+        new THREE.CircleGeometry(1.55, 32),
+        new THREE.MeshPhysicalMaterial({ color: t.water, roughness: 0.08, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, opacity: 0.9 }),
       );
       this.water.rotation.x = -Math.PI / 2;
       this.water.position.set(0, 0.02, -11.5);
@@ -139,7 +144,7 @@ export class Garden {
         g.add(post);
         const glow = new THREE.Mesh(
           new THREE.SphereGeometry(0.18, 10, 8),
-          new THREE.MeshStandardMaterial({ color: glowColor, emissive: glowColor, emissiveIntensity: 1.6 }),
+          new THREE.MeshStandardMaterial({ color: glowColor, emissive: glowColor, emissiveIntensity: 5 }),
         );
         glow.position.set(x, 1.05, z);
         glow.layers.set(LAYER_ENV);
@@ -168,6 +173,51 @@ export class Garden {
       inst.raycast = () => {};
       g.add(inst);
     }
+
+    // detailed dressing: grass tufts around the terrace, a ring of kerb stones
+    // and a second scatter of blossoms; toggled by the `detail` graphics tier
+    this.detailGroup = new THREE.Group();
+    const tuftGeo = new THREE.ConeGeometry(0.07, 0.34, 5);
+    const tuftMat = new THREE.MeshStandardMaterial({ color: shade(t.ground, 1.12), roughness: 0.9 });
+    const tufts = new THREE.InstancedMesh(tuftGeo, tuftMat, 420);
+    for (let i = 0; i < 420; i++) {
+      const a = rng.next() * Math.PI * 2;
+      const r = 10.4 + Math.pow(rng.next(), 1.6) * 13;
+      eul.set((rng.next() - 0.5) * 0.5, rng.next() * 6, (rng.next() - 0.5) * 0.5);
+      q.setFromEuler(eul);
+      const sc = 0.6 + rng.next() * 0.9;
+      m4.compose(new THREE.Vector3(Math.sin(a) * r, -0.5, Math.cos(a) * r), q, new THREE.Vector3(sc, sc, sc));
+      tufts.setMatrixAt(i, m4);
+    }
+    tufts.layers.set(LAYER_ENV);
+    tufts.raycast = () => {};
+    this.detailGroup.add(tufts);
+    const kerbGeo = new THREE.BoxGeometry(0.9, 0.16, 0.42);
+    const kerbMat = new THREE.MeshStandardMaterial({ map: marbleTexture(hex(t.path), '#6f624e', seed + 29), roughness: 0.85 });
+    const kerbN = 44;
+    const kerbs = new THREE.InstancedMesh(kerbGeo, kerbMat, kerbN);
+    for (let i = 0; i < kerbN; i++) {
+      const a = (i / kerbN) * Math.PI * 2;
+      eul.set(0, a, 0);
+      q.setFromEuler(eul);
+      m4.compose(new THREE.Vector3(Math.sin(a) * 10.25, -0.42, Math.cos(a) * 10.25), q, new THREE.Vector3(1, 0.9 + rng.next() * 0.2, 1));
+      kerbs.setMatrixAt(i, m4);
+    }
+    kerbs.receiveShadow = true;
+    kerbs.layers.set(LAYER_ENV);
+    kerbs.raycast = () => {};
+    this.detailGroup.add(kerbs);
+    const blossom = new THREE.InstancedMesh(flowerGeo, new THREE.MeshStandardMaterial({ color: 0xf4efe0, roughness: 0.7 }), 70);
+    for (let i = 0; i < 70; i++) {
+      const a = rng.next() * Math.PI * 2;
+      const r = 10.8 + rng.next() * 10;
+      m4.compose(new THREE.Vector3(Math.sin(a) * r, -0.48, Math.cos(a) * r), q.identity(), new THREE.Vector3(0.5 + rng.next() * 0.5, 0.5, 0.5 + rng.next() * 0.5));
+      blossom.setMatrixAt(i, m4);
+    }
+    blossom.layers.set(LAYER_ENV);
+    blossom.raycast = () => {};
+    this.detailGroup.add(blossom);
+    g.add(this.detailGroup);
 
     // ambient drifting particles (petals / snow / embers)
     this.ambient = null;
@@ -198,6 +248,7 @@ export class Garden {
 
   /** Decorative motion; paused when the tab is hidden (the loop stops). */
   update(dt, elapsed) {
+    if (this.reducedMotion) return; // decorative motion holds still
     if (this.water) {
       this.water.position.y = 0.02 + Math.sin(elapsed * 1.4) * 0.015;
     }
@@ -205,6 +256,15 @@ export class Garden {
       const f = this.flames[i];
       const s = 1 + Math.sin(elapsed * 9 + i * 1.7) * 0.08;
       f.scale.setScalar(s);
+      // warm shimmer: layered sines read as a flame, never a strobe
+      f.material.emissiveIntensity = 4.6 + Math.sin(elapsed * 7.3 + i) * 0.25 + Math.sin(elapsed * 13.1 + i * 2.3) * 0.15;
+    }
+    // canopy sway
+    for (const leaf of this.leaves) {
+      const b = leaf.userData.base;
+      const ph = leaf.userData.phase;
+      leaf.position.x = b.x + Math.sin(elapsed * 0.9 + ph) * 0.05;
+      leaf.position.z = b.z + Math.sin(elapsed * 0.7 + ph * 1.3) * 0.035;
     }
     if (this.ambient) {
       const pos = this.ambient.geometry.attributes.position;
@@ -219,9 +279,11 @@ export class Garden {
     }
   }
 
-  setDetail(level) {
-    // low tiers hide ambient particles and flowers
-    if (this.ambient) this.ambient.visible = level !== 'low';
+  /** Graphics tiers: `particles` gates ambient drift, `detail` the extra dressing. */
+  setDetail(q) {
+    const particles = q?.particles || 'low';
+    if (this.ambient) this.ambient.visible = particles === 'high' && !this.reducedMotion;
+    if (this.detailGroup) this.detailGroup.visible = q?.detail === 'detailed';
   }
 
   dispose() {

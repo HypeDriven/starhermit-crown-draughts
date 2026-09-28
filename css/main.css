@@ -382,7 +382,22 @@ button { font-family: inherit; }
 .slider-val { width: 3.2rem; text-align: right; font-variant-numeric: tabular-nums; }
 .toggle-row { flex-direction: row; align-items: center; gap: 0.6rem; }
 .toggle-row small { color: var(--ink-dim); }
-.toggle { width: 22px; height: 22px; accent-color: var(--accent); }
+.toggle { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+/* graphics quality */
+.gfx-quality { border-bottom: 1px solid var(--line); padding-bottom: 0.6rem; margin-bottom: 0.9rem; }
+.gfx-heading { font-size: 1rem; margin: 0 0 0.6rem; color: var(--accent); }
+.gfx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); column-gap: 0.8rem; }
+.gfx-grid .field { margin-bottom: 0.5rem; }
+.gfx-grid .select { width: 100%; min-width: 0; }
+.gfx-scale-row .slider { min-width: 0; }
+.gfx-summary { font-size: 0.82rem; color: var(--ink-dim); margin: 0.4rem 0 0; overflow-wrap: anywhere; }
+.gfx-post-note { color: var(--warn); font-size: 0.85rem; }
+#fps-meter {
+  position: fixed; left: calc(8px + var(--sal)); bottom: calc(8px + var(--sab)); z-index: 60;
+  pointer-events: none; font: 12px/1.2 ui-monospace, monospace; color: var(--ink);
+  background: rgba(10, 12, 8, 0.7); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px;
+}
+#fps-meter[hidden] { display: none; }
 .controls-table { width: 100%; border-collapse: collapse; }
 .controls-table th, .controls-table td { text-align: left; padding: 0.25rem 0.3rem; border-bottom: 1px solid var(--line); }
 .controls-table .btn { min-height: 36px; padding: 0.3rem 0.6rem; font-size: 0.85rem; }

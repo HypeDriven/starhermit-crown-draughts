@@ -13,6 +13,8 @@ import { THEMES, COSMETICS, MASTERY_TRACK, nextMilestone } from '../content/them
 import { ACHIEVEMENTS } from '../content/achievements.js';
 import { dailyDefinition, msUntilNextDaily } from '../content/daily.js';
 import { ACTIONS, DEFAULT_KEYBOARD, DEFAULT_GAMEPAD } from './input.js';
+import { CATEGORIES, PRESETS, presetTier, choosePreset, describe } from '../render/gfx.js';
+import { gfxStrings, fmt } from './gfx-i18n.js';
 
 // --- title -------------------------------------------------------------------
 
@@ -555,7 +557,7 @@ export function buildSettings(app, modal) {
   ];
   let first = true;
   for (const [id, label, builder] of defs) {
-    const tab = el('button', { type: 'button', role: 'tab', class: `tab${first ? ' active' : ''}`, text: label, 'aria-selected': first });
+    const tab = el('button', { type: 'button', role: 'tab', class: `tab${first ? ' active' : ''}`, text: label, 'aria-selected': String(first), 'data-tab': id, id: `settings-tab-${id}` });
     tab.addEventListener('click', () => {
       audio.tabSwitch();
       tabs.querySelectorAll('.tab').forEach((t) => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
@@ -601,17 +603,8 @@ function settingsAudio(app) {
 }
 
 function settingsGraphics(app) {
-  const s = app.settings.graphics;
-  const wrap = el('div', {});
-  const tiers = [['auto', 'Auto (recommended)'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']];
-  const sel = el('select', { class: 'select', 'aria-label': 'Quality tier' });
-  for (const [v, label] of tiers) {
-    const o = el('option', { value: v, text: label });
-    if (s.tier === v) o.selected = true;
-    sel.appendChild(o);
-  }
-  sel.addEventListener('change', () => { s.tier = sel.value; app.applyGraphicsSettings(); });
-  wrap.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Quality tier' }), sel]));
+  const wrap = el('div', { class: 'gfx-panel', id: 'gfx-panel' });
+  wrap.appendChild(buildGraphicsQuality(app));
   const cam = el('select', { class: 'select', 'aria-label': 'Camera' });
   for (const [v, label] of [['classic', 'Classic'], ['low', 'Low (near the stone)'], ['top', 'Top-down']]) {
     const o = el('option', { value: v, text: label });
@@ -633,6 +626,98 @@ function settingsGraphics(app) {
   });
   wrap.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Garden theme' }), theme]));
   return wrap;
+}
+
+/**
+ * Graphics quality block: preset, render scale, per-category overrides,
+ * adaptive resolution, frame-rate readout and a live cost summary. Every
+ * change applies immediately and is saved with the other settings.
+ */
+function buildGraphicsQuality(app) {
+  const T = gfxStrings();
+  const box = el('div', { class: 'gfx-quality' });
+  const save = () => { app.applyGraphicsSettings(); refresh(); };
+  const info = () => app.renderer?.graphicsInfo?.() || { gpu: 'unknown GPU', detected: 'low', resolved: null, pixels: [0, 0], postFailed: false };
+  box.appendChild(el('h3', { class: 'gfx-heading', text: T.heading }));
+
+  // quality preset
+  const presetSel = el('select', { class: 'select', id: 'gfx-preset', 'data-gfx': 'preset' });
+  const autoOpt = el('option', { value: 'auto' });
+  presetSel.appendChild(autoOpt);
+  for (const p of PRESETS) presetSel.appendChild(el('option', { value: p, text: T.presets[p] }));
+  presetSel.addEventListener('change', () => {
+    app.settings.graphics = choosePreset(app.settings.graphics, presetSel.value);
+    save();
+  });
+  box.appendChild(el('label', { class: 'field', for: 'gfx-preset' }, [el('span', { text: T.quality }), presetSel]));
+
+  // render scale 50–200 %
+  const scale = el('input', { type: 'range', min: 0.5, max: 2, step: 0.05, class: 'slider', id: 'gfx-scale', 'data-gfx': 'render_scale' });
+  const scaleVal = el('span', { class: 'slider-val' });
+  scale.addEventListener('input', () => {
+    scaleVal.textContent = `${Math.round(Number(scale.value) * 100)}%`;
+    audio.sliderDrag();
+  });
+  scale.addEventListener('change', () => { app.settings.graphics.render_scale = Number(scale.value); save(); });
+  box.appendChild(el('label', { class: 'field slider-row gfx-scale-row', for: 'gfx-scale' }, [el('span', { text: T.renderScale }), scale, scaleVal]));
+
+  // per-category overrides
+  const catSels = {};
+  const grid = el('div', { class: 'gfx-grid' });
+  for (const [cat, tiers] of Object.entries(CATEGORIES)) {
+    const sel = el('select', { class: 'select', id: `gfx-${cat}`, 'data-gfx-cat': cat });
+    sel.appendChild(el('option', { value: 'preset' }));
+    for (const t of tiers) sel.appendChild(el('option', { value: t, text: T.tiers[t] || t }));
+    sel.addEventListener('change', () => {
+      if (sel.value === 'preset') delete app.settings.graphics[cat];
+      else app.settings.graphics[cat] = sel.value;
+      save();
+    });
+    catSels[cat] = sel;
+    grid.appendChild(el('label', { class: 'field', for: `gfx-${cat}` }, [el('span', { text: T.cats[cat] }), sel]));
+  }
+  box.appendChild(grid);
+
+  // toggles
+  const mkToggle = (id, label, key, def, hint) => {
+    const input = el('input', { type: 'checkbox', class: 'toggle', id, 'data-gfx': key });
+    input.addEventListener('change', () => { audio.toggle(); app.settings.graphics[key] = input.checked; save(); });
+    box.appendChild(el('label', { class: 'field toggle-row', for: id }, [input, el('span', { text: label }), hint ? el('small', { text: hint }) : null]));
+    return () => { input.checked = app.settings.graphics[key] ?? def; };
+  };
+  const syncAdaptive = mkToggle('gfx-adaptive', T.adaptive, 'adaptive', true, T.adaptiveHint);
+  const syncFps = mkToggle('gfx-fps', T.showFps, 'show_fps', false, '');
+
+  const summary = el('p', { class: 'gfx-summary', id: 'gfx-summary', 'aria-live': 'polite' });
+  const note = el('p', { class: 'setup-note gfx-post-note', id: 'gfx-post-note', text: T.postNote, hidden: true });
+  box.appendChild(summary);
+  box.appendChild(note);
+
+  function refresh() {
+    const g = app.settings.graphics;
+    const inf = info();
+    const r = inf.resolved;
+    autoOpt.textContent = fmt(T.auto, { tier: T.presets[inf.detected] || inf.detected });
+    presetSel.value = PRESETS.includes(g.preset) ? g.preset : 'auto';
+    const rs = Number(g.render_scale) || 1;
+    scale.value = String(rs);
+    scaleVal.textContent = `${Math.round(rs * 100)}%`;
+    const preset = r?.preset || inf.detected;
+    for (const [cat, sel] of Object.entries(catSels)) {
+      const pt = presetTier(preset, cat);
+      sel.options[0].textContent = fmt(T.fromPreset, { tier: T.tiers[pt] || pt });
+      sel.value = CATEGORIES[cat].includes(g[cat]) ? g[cat] : 'preset';
+    }
+    syncAdaptive();
+    syncFps();
+    summary.textContent = r ? `${inf.gpu} · ${describe(r, inf.pixels, T.sum)}` : inf.gpu;
+    summary.dataset.gfxPreset = r?.preset || '';
+    note.hidden = !inf.postFailed;
+  }
+  refresh();
+  // the post chain builds on the next frame; re-check for a failure note
+  setTimeout(refresh, 250);
+  return box;
 }
 
 function settingsControls(app) {

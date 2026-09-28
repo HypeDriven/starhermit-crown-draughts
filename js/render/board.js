@@ -38,6 +38,7 @@ export class BoardView {
     this.pieces = new Map();      // pieceId -> view state
     this.tweens = [];
     this.cellGeoCache = new Map();
+    this.look = { reflections: 'off', detail: 'plain' };
     this._buildStatic();
     this._buildMarkers();
     this._raycaster = new THREE.Raycaster();
@@ -186,8 +187,11 @@ export class BoardView {
       this.group.remove(this.cellsMeshLight, this.cellsMeshDark);
       this.cellsMeshLight.geometry.dispose();
     }
-    const lightMat = new THREE.MeshStandardMaterial({ map: marbleTexture(numToHex(t.stoneLight), '#b0a488', 17 + s), roughness: 0.55 });
-    const darkMat = new THREE.MeshStandardMaterial({ map: slateTexture(numToHex(t.stoneDark), 23 + s), roughness: 0.6, color: new THREE.Color(0x9aa0b0) });
+    const lightMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture(numToHex(t.stoneLight), '#b0a488', 17 + s), roughness: 0.55 });
+    const darkMat = new THREE.MeshPhysicalMaterial({ map: slateTexture(numToHex(t.stoneDark), 23 + s), roughness: 0.6, color: new THREE.Color(0x9aa0b0) });
+    lightMat.userData.polish = { clearcoat: 0.3, clearcoatRoughness: 0.4, bump: 0.8, env: 0.22 };
+    darkMat.userData.polish = { clearcoat: 0.12, clearcoatRoughness: 0.5, bump: 1.4, env: 0.12 };
+    this.cellMats = [lightMat, darkMat];
     const cellGeo = new THREE.BoxGeometry(0.955, 0.09, 0.955);
     const lightCells = [];
     const darkCells = [];
@@ -224,10 +228,12 @@ export class BoardView {
         const tint = MATERIAL_TINTS[this.cosmetics?.material];
         if (tint) spec.color = tint;
       }
-      const mat = new THREE.MeshStandardMaterial({
-        color: spec.color, roughness: spec.rough, metalness: 0.12,
+      const mat = new THREE.MeshPhysicalMaterial({
+        color: spec.color, roughness: spec.rough, metalness: 0.08,
         map: color === 'onyx' ? slateTexture(numToHex(spec.color), 41) : marbleTexture(numToHex(spec.color), '#00000022', 43),
       });
+      // polished turned stone: a lacquer-like clearcoat over the matte body
+      mat.userData.polish = { clearcoat: 0.7, clearcoatRoughness: 0.2, bump: 0.5, env: color === 'onyx' ? 0.2 : 0.35 };
       const im = new THREE.InstancedMesh(bodyGeo, mat, maxForColor);
       im.castShadow = true;
       im.receiveShadow = true;
@@ -236,7 +242,9 @@ export class BoardView {
       im.raycast = () => {}; // picking goes through the cell plane
       this.group.add(im);
       this.pieceMeshes.set(color, im);
-      const cm = new THREE.InstancedMesh(crownGeo, new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.35, metalness: 0.65, emissive: 0x332200 }), maxForColor);
+      const crownMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.3, metalness: 0.75, emissive: 0x332200 });
+      crownMat.userData.polish = { env: 0.9 };
+      const cm = new THREE.InstancedMesh(crownGeo, crownMat, maxForColor);
       cm.castShadow = true;
       cm.layers.set(LAYER_GAME);
       cm.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -266,6 +274,38 @@ export class BoardView {
       if (cm) cm.count = im.count;
     }
     this._writeInstances();
+    this.setLook(this.look, this._env);
+  }
+
+  /**
+   * Graphics look: `reflections` turns on clearcoat + environment response,
+   * `detail` adds bump relief from the stone textures. Never touches markers.
+   */
+  setLook(q, envMap = this._env || null) {
+    this._env = envMap;
+    this.look = { reflections: q?.reflections || 'off', detail: q?.detail || 'plain' };
+    const refl = this.look.reflections === 'on' && !!envMap;
+    const detailed = this.look.detail === 'detailed';
+    const mats = [...(this.cellMats || [])];
+    for (const im of this.pieceMeshes?.values() || []) mats.push(im.material);
+    for (const cm of this.crownMeshes?.values() || []) mats.push(cm.material);
+    for (const m of mats) {
+      const p = m.userData.polish || {};
+      if ('clearcoat' in m) {
+        m.clearcoat = refl ? (p.clearcoat || 0) : 0;
+        m.clearcoatRoughness = p.clearcoatRoughness ?? 0.3;
+      }
+      const wantEnv = refl ? envMap : null;
+      if (m.envMap !== wantEnv) { m.envMap = wantEnv; m.needsUpdate = true; }
+      m.envMapIntensity = p.env ?? 0.3;
+      const wantBump = detailed && p.bump && m.map ? m.map : null;
+      if (m.bumpMap !== wantBump) {
+        m.bumpMap = wantBump;
+        m.bumpScale = p.bump || 1;
+        m.needsUpdate = true;
+      }
+    }
+    this._crownGlint = 0;
   }
 
   /** Set targets from a fresh snapshot (idempotent). */
@@ -435,6 +475,9 @@ export class BoardView {
       if (v.selected) this.selRing.position.set(v.x, 0.105, v.z);
     }
     this.ghostMat.opacity = 0.65 + Math.sin(performance.now() / 300) * 0.2;
+    // slow glint on the gold crowns (feeds bloom); steady under reduced motion
+    const glint = this.reducedMotion ? 0 : Math.max(0, Math.sin(performance.now() / 900)) ** 6;
+    for (const cm of this.crownMeshes?.values() || []) cm.material.emissiveIntensity = 1 + glint * 3;
     this._writeInstances();
   }
 
@@ -511,7 +554,7 @@ function pieceBodyGeometry() {
     [0.30, 0.16], [0.28, 0.20], [0.33, 0.24], [0.30, 0.28], [0.20, 0.30], [0.001, 0.31],
   ];
   for (const [x, y] of profile) pts.push(new THREE.Vector2(x, y));
-  const geo = new THREE.LatheGeometry(pts, 22);
+  const geo = new THREE.LatheGeometry(pts, 40);
   geo.computeVertexNormals();
   return geo;
 }
@@ -522,7 +565,7 @@ function crownGeometry() {
     [0.001, 0], [0.22, 0], [0.26, 0.03], [0.24, 0.08], [0.16, 0.10], [0.20, 0.16], [0.10, 0.20], [0.001, 0.22],
   ];
   for (const [x, y] of profile) pts.push(new THREE.Vector2(x, y));
-  return new THREE.LatheGeometry(pts, 14);
+  return new THREE.LatheGeometry(pts, 28);
 }
 
 function numToHex(n) {

@@ -628,15 +628,7 @@ export class App {
   }
 
   applyGraphicsSettings() {
-    const tier = this.settings.graphics.tier;
-    if (tier === 'auto') {
-      const coarse = matchMedia('(pointer: coarse)').matches;
-      const small = Math.min(screen.width, screen.height) < 760;
-      this.renderer?.setQuality(coarse || small ? 'medium' : 'high');
-      if (coarse && small) this.renderer?.setQuality('medium');
-    } else {
-      this.renderer?.setQuality(tier);
-    }
+    this.renderer?.setGraphics(this.settings.graphics);
     this.renderer?.setCameraPreset(this.settings.camera.preset);
     this.saveSettings();
   }
@@ -648,7 +640,9 @@ export class App {
     document.body.classList.toggle('large-text', a.largeText);
     document.body.classList.toggle('left-handed', a.leftHanded);
     document.body.dataset.palette = a.colorPalette;
-    this.renderer?.setReducedMotion(a.reducedMotion);
+    let osReduced = false;
+    try { osReduced = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { /* no media queries */ }
+    this.renderer?.setReducedMotion(a.reducedMotion || osReduced);
     this.$domBoardWrap.classList.toggle('pinned', a.domBoard);
     this._applyTextSize();
     this.saveSettings();
