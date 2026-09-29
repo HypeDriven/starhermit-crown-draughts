@@ -330,3 +330,7 @@ QA bar (checkable): every mode reachable from the visible UI on desktop and phon
 - A drawer toggle for the rails on tablet widths, and a truce illustration on results.
 - Author `TERMINAL_REASON_TEXT['move-limit-failed']` and play `levelFail` for it.
 - Theme-specific music roots already exist per theme; a dedicated authored intensity stem for endgames is intended.
+
+## Browser interference
+
+`browser-guard.js` (loaded from `index.html`) suppresses browser UI that gets in the way of play: the right-click context menu, the iOS long-press callout, copy / cut / paste, and page text selection. Text fields (inputs, textareas, selects, contenteditable) keep normal selection, context menu and clipboard behaviour.
