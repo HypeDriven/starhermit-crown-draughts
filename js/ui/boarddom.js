@@ -103,11 +103,11 @@ export class DomBoard {
     const size = this.state?.size || 8;
     let { r, c } = this.cursor;
     for (let i = 0; i < size; i++) {
-      r = Math.min(size - 1, Math.max(0, r + dr));
-      c = Math.min(size - 1, Math.max(0, c + dc));
-      if (isPlayable(size, r, c)) break;
+      r += dr;
+      c += dc;
+      if (r < 0 || r >= size || c < 0 || c >= size) break;
+      if (isPlayable(size, r, c)) { this.setCursor(r, c); break; }
     }
-    this.setCursor(r, c);
     this.focusCursor();
   }
 

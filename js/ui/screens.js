@@ -15,12 +15,13 @@ import { dailyDefinition, msUntilNextDaily } from '../content/daily.js';
 import { ACTIONS, DEFAULT_KEYBOARD, DEFAULT_GAMEPAD } from './input.js';
 import { CATEGORIES, PRESETS, presetTier, choosePreset, describe } from '../render/gfx.js';
 import { gfxStrings, fmt } from './gfx-i18n.js';
+import { platformStrings, pfmt } from './platform-i18n.js';
 
 // --- title -------------------------------------------------------------------
 
 export function buildTitle(app, root) {
   const resume = app.pendingSnapshot();
-  root.replaceChildren(
+  root.replaceChildren(...[
     el('div', { class: 'title-block' }, [
       el('img', {
         class: 'title-emblem', src: 'assets/title-emblem.webp', alt: '', width: '112', height: '112',
@@ -41,7 +42,23 @@ export function buildTitle(app, root) {
       button('Settings', () => app.openSettings(), { kind: 'ghost' }),
       button('Help', () => app.openHelp(), { kind: 'ghost' }),
     ]),
-  );
+    platformRow(app),
+  ].filter(Boolean));
+}
+
+/** StarHermit row: sign-in (on *.starhermit.com without a token) or the
+ *  signed-in player name + Invite a friend. Empty when running locally. */
+function platformRow(app) {
+  const T = platformStrings();
+  const p = app.platform;
+  if (p.canSignIn()) {
+    return el('div', { class: 'title-footer platform-row' }, [button(T.signIn, () => p.signIn(), { kind: 'ghost', class: 'btn btn-ghost btn-signin' })]);
+  }
+  if (!p.hosted) return null;
+  return el('div', { class: 'title-footer platform-row' }, [
+    el('p', { class: 'setup-note platform-name', text: pfmt(T.playingAs, { name: app.profile.name }) }),
+    p.inviteLink() ? button(T.invite, () => app.copyInviteLink(), { kind: 'ghost', class: 'btn btn-ghost btn-invite' }) : null,
+  ].filter(Boolean));
 }
 
 function todayShort() {
@@ -732,6 +749,7 @@ function settingsControls(app) {
       app.settings.bindings[a.id] = [code];
       app.input.applyOverrides(app.settings.bindings);
       app.saveSettings();
+      app.platform.setControl(a.id, [code]); // platform controls (signed in only)
       keyBtn.textContent = app.input.bindingText(a.id);
     }, { kind: 'ghost' });
     const padBtn = button((app.input.gamepad[a.id] || []).map((b) => `B${b}`).join('/') || '—', async () => {
@@ -752,6 +770,7 @@ function settingsControls(app) {
     app.input.keyboard = structuredClone(DEFAULT_KEYBOARD);
     app.input.gamepad = structuredClone(DEFAULT_GAMEPAD);
     app.saveSettings();
+    app.platform.resetControls();
     app.ui.toast('Bindings reset to defaults.');
   }, { kind: 'ghost' }));
   return wrap;
@@ -820,7 +839,8 @@ export function buildLobby(app, root) {
   wrap.appendChild(el('div', { class: 'setup-actions' }, [
     button('Join an open table', async () => { await app.quickJoinTable(); }, { kind: 'primary' }),
   ]));
-  wrap.appendChild(el('p', { class: 'setup-note', text: 'Open tables fill instantly. Private tables arrive as friend invites from the host shell — there are no join codes on the platform.' }));
+  wrap.appendChild(el('p', { class: 'setup-note', text: 'Open tables fill instantly. Private tables arrive as friend invites — there are no join codes on the platform.' }));
+  wrap.appendChild(tableInvites(app));
   wrap.appendChild(el('div', { class: 'setup-actions' }, [button('Back', () => app.go('modes'), { kind: 'ghost' })]));
   root.replaceChildren(wrap);
 }
@@ -848,6 +868,7 @@ export function buildTableRoom(app, root, client) {
   startBtn.disabled = !isHost;
   if (!isHost) startBtn.textContent = 'Waiting for the host…';
   wrap.appendChild(startBtn);
+  if (isHost && app.platform.hosted) wrap.appendChild(friendsPicker(app, client));
   // voice is an explicit opt-in and only when the host platform supports it
   const voiceNote = el('p', { class: 'setup-note', text: app.platform.mode === 'hosted'
     ? 'Voice rooms are available from the host shell once everyone joins. Voice is never required to play.'
@@ -855,6 +876,55 @@ export function buildTableRoom(app, root, client) {
   wrap.appendChild(voiceNote);
   wrap.appendChild(button('Leave table', () => app.leaveHosted(), { kind: 'ghost' }));
   root.replaceChildren(wrap);
+}
+
+/** Incoming realtime-room invites from friends, each with a Join button. */
+function tableInvites(app) {
+  const T = platformStrings();
+  const box = el('section', { class: 'platform-invites', 'aria-labelledby': 'table-invites-h' });
+  box.appendChild(el('h3', { id: 'table-invites-h', text: T.tableInvites }));
+  const list = el('ul', { class: 'roster invite-list' }, [el('li', { class: 'setup-note', text: '…' })]);
+  box.appendChild(list);
+  app.platform.pollInvites().then(async (res) => {
+    const raw = res.ok ? (Array.isArray(res.data) ? res.data : res.data?.incoming || res.data?.items || []) : [];
+    if (!raw.length) { list.replaceChildren(el('li', { class: 'setup-note', text: T.noInvites })); return; }
+    const rows = await Promise.all(raw.map(async (inv) => {
+      const from = inv.fromUserId || inv.hostUserId || inv.userId;
+      const name = inv.fromName || (from ? await app.platform.profileFor(from) : '—');
+      return el('li', { class: 'invite-row' }, [
+        el('span', { text: pfmt(T.from, { name }) }),
+        button(T.join, () => app.acceptTableInvite(inv.id || inv.inviteId), { kind: 'primary' }),
+      ]);
+    }));
+    list.replaceChildren(...rows);
+  }).catch(() => list.replaceChildren(el('li', { class: 'setup-note', text: T.noInvites })));
+  return box;
+}
+
+/** Host: invite StarHermit friends (online first) to this table. */
+function friendsPicker(app, client) {
+  const T = platformStrings();
+  const box = el('section', { class: 'platform-invites', 'aria-labelledby': 'friends-h' });
+  box.appendChild(el('h3', { id: 'friends-h', text: T.inviteFriends }));
+  const list = el('ul', { class: 'roster invite-list' }, [el('li', { class: 'setup-note', text: '…' })]);
+  box.appendChild(list);
+  app.platform.listFriends().then((res) => {
+    const friends = (res.data || []).slice().sort((a, b) => (b.online ? 1 : 0) - (a.online ? 1 : 0));
+    if (!friends.length) { list.replaceChildren(el('li', { class: 'setup-note', text: T.noFriends })); return; }
+    list.replaceChildren(...friends.map((f) => {
+      const btn = button(T.sendInvite, async () => {
+        btn.disabled = true;
+        const r = await app.platform.inviteToRoom(client.roomId, f.userId);
+        if (r.ok) btn.textContent = T.invited;
+        else { btn.disabled = false; app.ui.toast(T.inviteFailed, 'warn'); }
+      }, { kind: 'secondary' });
+      return el('li', { class: 'invite-row' }, [
+        el('span', { text: `${f.name} · ${f.online ? T.online : T.offline}` }),
+        btn,
+      ]);
+    }));
+  }).catch(() => list.replaceChildren(el('li', { class: 'setup-note', text: T.noFriends })));
+  return box;
 }
 
 export { confirmDialog, Modal };

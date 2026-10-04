@@ -145,21 +145,16 @@ export class InputManager {
     // axes as directional input
     const ax = pad.axes[0] || 0;
     const ay = pad.axes[1] || 0;
+    // Buttons and stick share one edge latch; neither may clear a held input
+    // from the other source. Otherwise every poll repeats the direction.
+    const axes = { left: ax < -0.6, right: ax > 0.6, up: ay < -0.6, down: ay > 0.6 };
     for (const [action, btns] of Object.entries(this.gamepad)) {
-      const hit = btns.some((b) => pressed.has(b));
+      const hit = btns.some((b) => pressed.has(b)) || !!axes[action];
       if (hit && !this._padState.has(action)) {
         this._padState.add(action);
         this.onAction(action, { source: 'gamepad' });
       } else if (!hit) {
         this._padState.delete(action);
-      }
-    }
-    for (const [axisAction, active] of [['left', ax < -0.6], ['right', ax > 0.6], ['up', ay < -0.6], ['down', ay > 0.6]]) {
-      if (active && !this._padState.has(axisAction)) {
-        this._padState.add(axisAction);
-        this.onAction(axisAction, { source: 'gamepad' });
-      } else if (!active) {
-        this._padState.delete(axisAction);
       }
     }
   }

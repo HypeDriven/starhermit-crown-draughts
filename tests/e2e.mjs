@@ -30,6 +30,9 @@ const consoleErrors = [];
 page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warn') consoleErrors.push(`${m.type()}: ${m.text()}`); });
 page.on('pageerror', (e) => consoleErrors.push(String(e)));
 page.on('response', (r) => { if (r.status() >= 400) consoleErrors.push(`http ${r.status()} ${r.url()}`); });
+// standalone play must never call StarHermit
+const PLATFORM_API = /\/api\/v1\/(games|users|me|leaderboards|realtime|chat)\//;
+page.on('request', (r) => { if (PLATFORM_API.test(new URL(r.url()).pathname)) consoleErrors.push('standalone StarHermit call: ' + r.url()); });
 
 await page.goto(base, { waitUntil: 'networkidle2', timeout: 30000 });
 await page.waitForFunction(() => document.body.dataset.screen === 'title', { timeout: 15000 });
@@ -350,6 +353,65 @@ const fits = await page.evaluate(async () => {
   return m.left >= 0 && m.right <= innerWidth && m.bottom <= innerHeight && document.documentElement.scrollWidth <= innerWidth;
 });
 check('mobile: Graphics panel fits the viewport', fits);
+
+// signed in through StarHermit: launch token in the fragment, platform API stubbed
+async function platformPass(viewport, tag) {
+  const p = await browser.newPage();
+  await p.setViewport(viewport);
+  const errs = [], seen = [];
+  p.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warn') errs.push(`${m.type()}: ${m.text()}`); });
+  p.on('pageerror', (e) => errs.push(String(e)));
+  await p.setRequestInterception(true);
+  p.on('request', (req) => {
+    const u = new URL(req.url());
+    if (!PLATFORM_API.test(u.pathname) && u.pathname !== '/api/v1/time') return req.continue();
+    seen.push(req.method() + ' ' + u.pathname);
+    const json = (o) => req.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
+    if (u.pathname === '/api/v1/time') return json({ now: Date.now() });
+    if (u.pathname.endsWith('/profile')) return json({ nickname: u.pathname.includes('u-friend') ? 'Rook Friend' : 'Pip Tester' });
+    if (u.pathname.endsWith('/settings') && req.method() === 'GET') return json({ settings: { accessibility: { highContrast: true } } });
+    if (u.pathname.endsWith('/controls')) return json({ actions: [{ action: 'pause', codes: ['KeyO'] }] });
+    if (u.pathname.endsWith('/me/friends')) return json([{ userId: 'u-friend', online: true }]);
+    if (u.pathname.endsWith('/realtime/rooms/invites')) return json([{ id: 'inv1', fromUserId: 'u-friend' }]);
+    if (u.pathname.endsWith('/realtime/rooms') && req.method() === 'POST') return json({ roomId: 'room1' });
+    if (u.pathname.endsWith('/realtime/rooms/room1/invites')) return json({ id: 'sent1' });
+    return req.respond({ status: 204, body: '' });
+  });
+  const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const jwt = `${b64u({ alg: 'none' })}.${b64u({ sub: 'u-e2e-0001', game_scope: 'crown-draughts', exp: Math.floor(Date.now() / 1000) + 3600 })}.sig`;
+  await p.evaluateOnNewDocument(() => { globalThis.WebSocket = class { constructor() { this.readyState = 0; } send() {} close() {} }; });
+  await p.goto(`${base}/#game_token=${jwt}`, { waitUntil: 'networkidle2' });
+  await p.waitForFunction(() => document.body.dataset.screen === 'title', { timeout: 15000 });
+  await p.evaluate(() => [...document.querySelectorAll('.modal button, .consent-banner button')].find((b) => b.textContent === 'No thanks')?.click());
+  await p.waitForFunction(() => /Pip Tester/.test(document.querySelector('.platform-name')?.textContent || ''), { timeout: 8000 }).catch(() => {});
+  check(`[${tag}] signed in: nickname on the title`, await p.evaluate(() => /Pip Tester/.test(document.querySelector('.platform-name')?.textContent || '')));
+  check(`[${tag}] launch fragment stripped`, (await p.evaluate(() => location.hash)) === '');
+  check(`[${tag}] cloud save loaded from game:<slug>`, seen.includes('GET /api/v1/me/cloud-saves/' + encodeURIComponent('game:crown-draughts')), seen.join(', '));
+  await p.waitForFunction(() => document.body.classList.contains('high-contrast'), { timeout: 5000 }).catch(() => {});
+  check(`[${tag}] platform settings applied`, await p.evaluate(() => document.body.classList.contains('high-contrast')));
+  check(`[${tag}] platform key binding applied`, await p.evaluate(() => globalThis.__crownDraughts.input.keyboard.pause.join() === 'KeyO'));
+  const inv = await p.$('.btn-invite');
+  if (inv) { await inv.click(); await new Promise((r) => setTimeout(r, 300)); }
+  check(`[${tag}] Invite a friend shows a toast`, !!inv && await p.evaluate(() => /Invite link|invite link/.test(document.getElementById('toast-region').textContent)));
+  await p.screenshot({ path: `${SHOTS}/14-platform-${tag}.png` });
+  await p.evaluate(() => globalThis.__crownDraughts.openMode('hosted'));
+  await p.waitForFunction(() => /From Rook Friend/.test(document.querySelector('.invite-list')?.textContent || ''), { timeout: 5000 }).catch(() => {});
+  check(`[${tag}] lobby lists the friend's table invite`, await p.evaluate(() => /From Rook Friend/.test(document.querySelector('.invite-list')?.textContent || '')));
+  await p.evaluate(() => globalThis.__crownDraughts.hostTable({ ruleset: 'duel', listed: false, clock: false }));
+  await p.waitForFunction(() => /Rook Friend/.test([...document.querySelectorAll('.invite-list')].map((e) => e.textContent).join()), { timeout: 5000 }).catch(() => {});
+  const sent = await p.evaluate(async () => {
+    const btn = [...document.querySelectorAll('.invite-row button')].find((b) => b.textContent === 'Invite');
+    btn?.click();
+    await new Promise((r) => setTimeout(r, 400));
+    return btn?.textContent;
+  });
+  check(`[${tag}] host invites a friend to the table`, sent === 'Invited' && seen.includes('POST /api/v1/realtime/rooms/room1/invites'), String(sent));
+  await p.screenshot({ path: `${SHOTS}/15-table-invite-${tag}.png` });
+  check(`[${tag}] no console errors`, errs.length === 0, errs.slice(0, 5).join(' | '));
+  await p.close();
+}
+await platformPass({ width: 1280, height: 800 }, 'platform-desktop');
+await platformPass({ width: 390, height: 844, isMobile: true, hasTouch: true }, 'platform-mobile');
 
 check('no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 5).join(' | '));
 

@@ -5,7 +5,8 @@
   "private": true,
   "description": "Crown Draughts — carved-stone draughts in a royal garden. Deterministic rules engine, Three.js presentation, semantic HTML interface.",
   "scripts": {
-    "test": "node --test tests/engine.test.mjs tests/ai.test.mjs tests/content.test.mjs tests/session.test.mjs tests/server.test.mjs tests/gfx.test.mjs",
+    "test": "node --test tests/engine.test.mjs tests/ai.test.mjs tests/content.test.mjs tests/session.test.mjs tests/server.test.mjs tests/gfx.test.mjs tests/platform.test.mjs",
+    "test:e2e": "node tests/e2e.mjs",
     "check": "node tools/check.mjs",
     "bake": "node tools/bake-content.mjs",
     "serve": "node server.js --dev"

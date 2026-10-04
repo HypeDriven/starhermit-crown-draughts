@@ -70,6 +70,18 @@ export class HostedSessionClient extends Emitter {
     if (!res.ok) {
       return { ok: false, error: res.status === 404 ? 'no-open-tables' : (res.error || 'could-not-join') };
     }
+    return HostedSessionClient.fromRoom(platform, res, { name });
+  }
+
+  /** Guest: accept a friend's table invite (realtime room invite). */
+  static async acceptInvite(platform, inviteId, { name } = {}) {
+    const res = await platform.acceptRoomInvite(inviteId);
+    if (!res.ok || !res.data) return { ok: false, error: res.error || 'could-not-join' };
+    return HostedSessionClient.fromRoom(platform, res, { name });
+  }
+
+  /** Guest client from a join/accept response ({ roomId|id, seat, metadata }). */
+  static fromRoom(platform, res, { name } = {}) {
     const roomId = res.data?.roomId || res.data?.id;
     if (!roomId) return { ok: false, error: 'bad-room-response' };
     const meta = res.data?.metadata || {};

@@ -78,6 +78,12 @@ export class RenderFacade {
       this.ok = true;
     } catch (e) {
       this.ok = false;
+      // No GL: every drawing method becomes a no-op so the DOM board carries the game.
+      for (const name of Object.getOwnPropertyNames(RenderFacade.prototype)) {
+        if (name === 'constructor' || name === '_init') continue;
+        if (typeof RenderFacade.prototype[name] !== 'function') continue;
+        this[name] = name === 'projectCell' ? () => null : () => {};
+      }
       onCompat?.(e);
     }
   }
@@ -490,10 +496,12 @@ export class RenderFacade {
     return this.board.projectToScreen(r, c, this.camera, this.canvas);
   }
   resetCamera(preset) {
+    if (!this.ok || !this.rig) return;
     if (preset) this.rig.preset = preset;
     this.rig.goTo(preset || this.rig.preset);
   }
   setCameraPreset(preset) {
+    if (!this.ok || !this.rig) return;
     this.rig.goTo(preset);
   }
 

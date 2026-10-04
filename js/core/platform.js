@@ -1,229 +1,97 @@
-// Platform adapter: StarHermit host integration when hosted (launch token in
-// the URL fragment), clean local fallbacks when standalone.
+// Platform adapter: StarHermit host integration when signed in, clean local
+// fallbacks when standalone. A thin layer over window.StarHermit
+// (starhermit-sdk.js, loaded as a classic script before the app module),
+// which reads the launch token (`#game_token=` / `#access_token=`), strips it,
+// renews it, and makes every API call; this class keeps the game's API.
 //
-// Token lifecycle: `#game_token=<jwt>` (optional `&session_id=`) is read once
-// and stripped from the URL; the JWT's `sub` + `game_scope` (never hard-coded)
-// identify the player and this game. Every REST call sends the token as
-// `Authorization: Bearer`; it re-mints every 45 min via
-// `POST /api/v1/games/{slug}/launch-token` (60 s retry after a failure).
-// Hosted mode activates whenever a token exists.
-//
-// Multiplayer uses realtime rooms (host-routed): `POST /api/v1/realtime/rooms`
-// (config: teamCount, seatsPerTeam, metadata, `aiPlayers` for AI seats),
-// `POST /rooms/quick-join`, `POST /rooms/{id}/open`, friend invites via
-// `GET /api/v1/me/friends` + `POST /rooms/{id}/invites`, `GET /rooms/invites`
-// polling, reconnect via `GET /rooms/mine`, results via
-// `POST /rooms/{id}/result`, leave via `POST /rooms/{id}/leave`. Transport is
-// `ws(s)://<host>/ws/v1/realtime?roomId=<id>&access_token=<token>`: binary
+// Multiplayer uses realtime rooms (host-routed) through `StarHermit.realtime`:
+// create (config: teamCount, seatsPerTeam, metadata, `aiPlayers`), quick-join,
+// open, friend invites (`StarHermit.friends()` + `realtime.invite`), incoming
+// room invites (`GET /rooms/invites`, `realtime.acceptInvite`), reconnect via
+// `GET /rooms/mine`, results via `POST /rooms/{id}/result`, leave via
+// `POST /rooms/{id}/leave`. Transport is `realtime.socketUrl(roomId)`: binary
 // frames carry a 16-byte sender-participant prefix (stripped on receipt;
 // guest→host only, host→everyone), JSON text frames are control messages.
 //
-// Cloud save is the real platform slot `GET/PUT /api/v1/me/cloud-saves/{slug}`
-// (zip+base64, one slot; remote wins on boot; debounced saves with a
-// pagehide flush). Presence/telemetry have no launch-token endpoints (wiki)
-// and are inert no-ops — calling them would only surface console errors.
-// Tokens are kept in memory only — never persisted.
+// Cloud save is the SDK slot `/api/v1/me/cloud-saves/game:<slug>` (remote
+// wins on boot; debounced saves with a pagehide flush). Preferences mirror to
+// the settings KV; key bindings to the platform controls. Presence/telemetry
+// have no launch-token endpoints (wiki) and are inert no-ops. Standalone makes
+// no network calls at all.
 
 const TELEMETRY_CATEGORIES = new Set(['start', 'tutorial_step', 'round_end', 'retry', 'settings_change', 'error']);
-const REFRESH_MS = 45 * 60 * 1000; // token lives 60 min; re-mint at 45
-const RETRY_MS = 60 * 1000;
 const SAVE_DEBOUNCE_MS = 2000;
-
-// Minimal ZIP writer/reader (stored entries only, no compression).
-const CRC_TABLE = (() => {
-  const t = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-function crc32(bytes) {
-  let c = 0xffffffff;
-  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-function zipStore(name, dataBytes) {
-  const enc = new TextEncoder();
-  const nameB = enc.encode(name);
-  const crc = crc32(dataBytes);
-  const out = [];
-  const u16 = (v) => out.push(v & 0xff, (v >> 8) & 0xff);
-  const u32 = (v) => out.push(v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >>> 24) & 0xff);
-  u32(0x04034b50); u16(20); u16(0); u16(0); u16(0); u16(0);
-  u32(crc); u32(dataBytes.length); u32(dataBytes.length);
-  u16(nameB.length); u16(0);
-  const head = new Uint8Array(out);
-  const cd = [];
-  const c16 = (v) => cd.push(v & 0xff, (v >> 8) & 0xff);
-  const c32 = (v) => cd.push(v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >>> 24) & 0xff);
-  c32(0x02014b50); c16(20); c16(20); c16(0); c16(0); c16(0); c16(0);
-  c32(crc); c32(dataBytes.length); c32(dataBytes.length);
-  c16(nameB.length); c16(0); c16(0); c16(0); c16(0); c32(0); c32(0);
-  const cdHead = new Uint8Array(cd);
-  const cdOff = head.length + nameB.length + dataBytes.length;
-  const parts = [head, nameB, dataBytes, cdHead, nameB];
-  const eocd = [];
-  const e32 = (v) => eocd.push(v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >>> 24) & 0xff);
-  const e16 = (v) => eocd.push(v & 0xff, (v >> 8) & 0xff);
-  e32(0x06054b50); e16(0); e16(0); e16(1); e16(1);
-  e32(cdHead.length + nameB.length); e32(cdOff); e16(0);
-  parts.push(new Uint8Array(eocd));
-  const total = parts.reduce((n, p) => n + p.length, 0);
-  const buf = new Uint8Array(total);
-  let o = 0;
-  for (const p of parts) { buf.set(p, o); o += p.length; }
-  return buf;
-}
-function unzipFirstEntry(zipBytes) {
-  const dv = new DataView(zipBytes.buffer, zipBytes.byteOffset, zipBytes.byteLength);
-  let off = 0;
-  while (off + 30 <= zipBytes.length && dv.getUint32(off, true) === 0x04034b50) {
-    const method = dv.getUint16(off + 8, true);
-    const size = dv.getUint32(off + 18, true);
-    const nameLen = dv.getUint16(off + 26, true);
-    const extraLen = dv.getUint16(off + 28, true);
-    const dataOff = off + 30 + nameLen + extraLen;
-    if (method !== 0) throw new Error('unsupported zip entry');
-    return zipBytes.slice(dataOff, dataOff + size);
-  }
-  throw new Error('bad zip');
-}
-function bytesToBase64(bytes) {
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000)
-    s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
+const PATCH_DEBOUNCE_MS = 400;
+const sdk = () => globalThis.StarHermit || null;
 
 export class Platform {
   constructor() {
-    this.mode = 'standalone';        // 'hosted' when a launch token was read
-    this.launchToken = null;         // memory only
-    this.userId = null;              // JWT sub
-    this.slug = null;                // JWT game_scope — never hard-coded
+    this.mode = 'standalone';        // 'hosted' while signed in
     this.profile = null;             // { name } for the signed-in player
     this.sync = 'offline';           // offline | saving | synced (cloud slot)
     this.timeOffsetMs = 0;           // serverNow = Date.now() + offset
     this.timeSyncedAt = 0;
     this.telemetryConsent = false;
     this.telemetryQueue = [];
-    this._refreshTimer = null;
-    this._retryTimer = null;
-    this._saveTimer = null;
-    this._pendingSave = null;
-    this._profileNames = {};
     this._syncListeners = new Set();
+    this._authListeners = new Set();
+    this._started = false;
+    this._patch = null;
+    this._patchTimer = null;
+    this._patchWaiters = [];
   }
 
-  /** Read the launch token (fragment, stripped), decode sub/game_scope, start
-   *  the 45-min refresh, and probe the server clock. Never throws. */
+  /** Read the launch token via StarHermit.init(), wire renewal/sign-out and
+   *  the pagehide flush, and (signed in) probe the server clock. Never throws. */
   async init() {
-    this.launchToken = this._readLaunchToken();
-    if (this.launchToken) {
-      const claims = this._decodeJwt(this.launchToken);
-      if (!claims) this.launchToken = null;
-      else {
-        if (typeof claims.sub === 'string' && claims.sub) this.userId = claims.sub;
-        if (typeof claims.game_scope === 'string' && claims.game_scope) this.slug = claims.game_scope;
-        if (!this.userId || !this.slug) this.launchToken = null; // unusable token
-      }
-    }
-    this.mode = this.launchToken ? 'hosted' : 'standalone';
-    if (this.mode === 'hosted') {
-      this._scheduleRefresh();
+    const s = sdk();
+    if (!s) return this.mode;
+    if (!this._started) {
+      this._started = true;
+      try { s.init(); } catch { /* malformed launch: stay standalone */ }
+      s.on('saved', (ok) => { if (this.hosted) this._setSync(ok ? 'synced' : 'offline'); });
+      s.on('auth', (a) => {
+        const was = this.hosted;
+        this.mode = a && a.signedIn && s.slug ? 'hosted' : 'standalone';
+        if (!this.hosted) { this.profile = null; this._setSync('offline'); }
+        if (was !== this.hosted) for (const fn of this._authListeners) { try { fn(this.hosted); } catch { /* ok */ } }
+      });
       try {
-        globalThis.addEventListener('pagehide', () => this.flushCloudSave());
-        globalThis.document?.addEventListener('visibilitychange', () => { if (globalThis.document.hidden) this.flushCloudSave(); });
+        globalThis.addEventListener?.('pagehide', () => this.flushCloudSave(true));
+        globalThis.document?.addEventListener('visibilitychange', () => { if (globalThis.document.hidden) this.flushCloudSave(true); });
       } catch { /* no window events available */ }
-      this.fetchProfile().catch(() => {});
     }
-    await this.syncTime();
+    this.mode = s.signedIn && s.slug ? 'hosted' : 'standalone';
+    if (this.hosted) {
+      this.fetchProfile().catch(() => {});
+      await this.syncTime();
+    }
     return this.mode;
   }
 
   get hosted() { return this.mode === 'hosted'; }
   get online() { return this.mode === 'hosted'; } // realtime available
+  get userId() { return sdk()?.userId || null; }
+  get slug() { return sdk()?.slug || null; }
+  get launchToken() { return sdk()?.token || null; }
 
-  _readLaunchToken() {
-    try {
-      const h = new URLSearchParams(String(globalThis.location?.hash || '').replace(/^#/, ''));
-      const t = h.get('game_token');
-      if (t) {
-        h.delete('game_token');
-        h.delete('session_id');
-        const rest = h.toString();
-        globalThis.history?.replaceState(null, '',
-          globalThis.location.pathname + globalThis.location.search + (rest ? '#' + rest : ''));
-        return t;
-      }
-      const q = new URLSearchParams(globalThis.location?.search || '');
-      return q.get('game_token') || q.get('token') || q.get('launch_token') || null;
-    } catch {
-      return null;
-    }
-  }
+  onAuth(fn) { if (typeof fn === 'function') this._authListeners.add(fn); }
+  canSignIn() { return !!sdk()?.canSignIn(); }
+  signIn() { return !!sdk()?.signIn(); }
+  inviteLink() { return this.hosted ? sdk()?.inviteLink() || null : null; }
 
-  _decodeJwt(t) {
-    try {
-      const seg = String(t).split('.')[1];
-      if (!seg) return null;
-      let b64 = seg.replace(/-/g, '+').replace(/_/g, '/');
-      b64 += '='.repeat((4 - (b64.length % 4)) % 4);
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      return JSON.parse(new TextDecoder().decode(bytes));
-    } catch {
-      return null;
-    }
-  }
+  async refreshToken() { const s = sdk(); return s ? !!(await s.refresh()) : false; }
 
-  /* Token refresh: scoped tokens may re-mint via the game's launch-token
-   * route. Retry a failed re-mint after ~60 s. */
-  _scheduleRefresh() {
-    if (this._refreshTimer) clearInterval(this._refreshTimer);
-    this._refreshTimer = setInterval(() => this.refreshToken(), REFRESH_MS);
-  }
-  async refreshToken() {
-    if (!this.launchToken || !this.slug) return false;
-    try {
-      const res = await fetch(`/api/v1/games/${encodeURIComponent(this.slug)}/launch-token`, {
-        method: 'POST', headers: this.headers(), body: '{}',
-      });
-      const data = await res.json().catch(() => null);
-      if (res.ok && data && typeof data.token === 'string' && data.token) {
-        this.launchToken = data.token; // memory only
-        const claims = this._decodeJwt(this.launchToken);
-        if (claims && claims.sub) this.userId = claims.sub;
-        if (claims && claims.game_scope) this.slug = claims.game_scope;
-        return true;
-      }
-    } catch { /* fall through to retry */ }
-    if (!this._retryTimer) {
-      this._retryTimer = setTimeout(() => { this._retryTimer = null; this.refreshToken(); }, RETRY_MS);
-    }
-    return false;
-  }
-
-  /* Identity: the profile nickname is the only profile read a game-scoped
-   * token may make. Never /api/v1/me, never usernames. Cached per id. */
+  /* Identity: the profile nickname (SDK: nickname, then "Player <id>"). */
   profileFor(userId) {
-    if (!userId || typeof userId !== 'string') return Promise.resolve('player');
-    if (this._profileNames[userId]) return this._profileNames[userId];
-    const p = fetch(`/api/v1/users/${encodeURIComponent(userId)}/profile`, { headers: this.headers() })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => (j && typeof j.nickname === 'string' && j.nickname ? j.nickname : null))
-      .then((n) => n || ('Player ' + userId.slice(0, 8)))
-      .catch(() => 'Player ' + userId.slice(0, 8));
-    this._profileNames[userId] = p;
-    return p;
+    const s = sdk();
+    if (!s || !this.hosted || !userId) return Promise.resolve('player');
+    return s.profile(String(userId)).then((p) => (p ? p.displayName : 'Player ' + String(userId).slice(0, 6)));
   }
 
   async fetchProfile() {
-    if (!this.userId) return null;
-    const name = (await this.profileFor(this.userId)).slice(0, 40);
+    if (!this.hosted) return null;
+    const name = String(await this.profileFor(this.userId)).slice(0, 40);
     this.profile = { name };
     return this.profile;
   }
@@ -237,20 +105,18 @@ export class Platform {
     }
   }
 
-  /** Server-synchronized now (round-trip adjusted). */
+  /** Server-synchronized now (round-trip adjusted; local clock standalone). */
   serverNow() { return Date.now() + this.timeOffsetMs; }
 
   async syncTime() {
+    if (!this.hosted) return false;
     try {
       const t0 = Date.now();
-      const res = await fetch('/api/v1/time', { headers: this.headers() });
+      const body = await sdk().api('/api/v1/time');
       const t1 = Date.now();
-      if (!res.ok) return false;
-      const body = await res.json();
-      const serverMs = Number(body.epochMs ?? body.serverTime ?? body.now);
+      const serverMs = Number(body?.epochMs ?? body?.serverTime ?? body?.now);
       if (!Number.isFinite(serverMs)) return false;
-      const rtt = t1 - t0;
-      this.timeOffsetMs = (serverMs + rtt / 2) - t1;
+      this.timeOffsetMs = (serverMs + (t1 - t0) / 2) - t1;
       this.timeSyncedAt = Date.now();
       return true;
     } catch {
@@ -265,123 +131,123 @@ export class Platform {
   }
 
   /**
-   * REST call with retries, rate-limit respect, and structured error mapping.
-   * Returns { ok, status, data?, error? } — never throws.
+   * Authenticated REST call through StarHermit.api with retries on network
+   * errors and 429. Returns { ok, status, data?, error? } — never throws.
    */
-  async api(path, { method = 'GET', body = null, retries = 2 } = {}) {
-    let attempt = 0;
-    for (;;) {
-      attempt += 1;
-      let res;
+  async api(path, { method = 'GET', body, retries = 2 } = {}) {
+    const s = sdk();
+    if (!s || !this.hosted) return { ok: false, status: 0, error: 'standalone' };
+    for (let attempt = 1; ; attempt++) {
       try {
-        res = await fetch(path, {
-          method,
-          headers: this.headers(),
-          body: body ? JSON.stringify(body) : null,
-        });
+        const data = await s.api(path, { method, body: body == null ? undefined : body });
+        return { ok: true, status: data == null ? 204 : 200, data };
       } catch (e) {
-        if (attempt > retries) return { ok: false, status: 0, error: 'network' };
-        await sleep(300 * attempt);
-        continue;
+        const status = e && typeof e.status === 'number' ? e.status : 0;
+        if ((status === 0 || status === 429) && attempt <= retries) { await sleep(status === 429 ? 1000 * attempt : 300 * attempt); continue; }
+        return { ok: false, status, error: status ? (e.message || `http-${status}`) : 'network', data: e && e.body };
       }
-      if (res.status === 429) {
-        const retryAfter = Number(res.headers.get('retry-after')) || 1;
-        if (attempt > retries + 1) return { ok: false, status: 429, error: 'rate-limited' };
-        await sleep(Math.min(retryAfter, 8) * 1000);
-        continue;
-      }
-      let data = null;
-      try { data = await res.json(); } catch { /* empty body */ }
-      if (!res.ok) {
-        return { ok: false, status: res.status, error: data?.error || `http-${res.status}`, data };
-      }
-      return { ok: true, status: res.status, data };
     }
   }
 
-  /* Cloud save: ONE zip+base64 slot at /api/v1/me/cloud-saves/{slug} for the
-   * progress document. Remote wins on boot; saves debounce ~2 s and flush on
-   * pagehide/hidden with keepalive. Returns the raw doc JSON string or null. */
+  /* Cloud save: the SDK's slot at /api/v1/me/cloud-saves/game:<slug> holds the
+   * progress document. Returns the raw doc JSON string or null. */
   async loadCloudSave() {
-    if (!this.hosted || !this.slug) return null;
+    const s = sdk();
+    if (!s || !this.hosted) return null;
     try {
-      const res = await fetch(`/api/v1/me/cloud-saves/${encodeURIComponent(this.slug)}`, { headers: this.headers() });
-      if (res.status === 404) return null;
-      if (!res.ok) throw new Error(`http-${res.status}`);
-      const buf = await res.arrayBuffer();
-      if (!buf || !buf.byteLength) return null;
-      return new TextDecoder().decode(unzipFirstEntry(new Uint8Array(buf)));
+      const obj = await s.loadJSON();
+      if (this.sync === 'offline') this._setSync('synced');
+      return obj ? JSON.stringify(obj) : null;
     } catch {
       return null;
     }
   }
 
   writeCloudSave(docJson) {
-    if (!this.hosted || !this.slug) return;
-    this._pendingSave = docJson;
+    const s = sdk();
+    if (!s || !this.hosted) return;
+    try { s.saveJSON(JSON.parse(docJson), SAVE_DEBOUNCE_MS); } catch { return; }
     this._setSync('saving');
-    if (this._saveTimer) clearTimeout(this._saveTimer);
-    this._saveTimer = setTimeout(() => this.flushCloudSave(), SAVE_DEBOUNCE_MS);
   }
 
-  async flushCloudSave() {
-    if (this._saveTimer) { clearTimeout(this._saveTimer); this._saveTimer = null; }
-    if (!this.hosted || !this.slug || this._pendingSave == null) return false;
-    const docJson = this._pendingSave;
-    this._pendingSave = null;
-    let body;
-    try {
-      body = { dataBase64: bytesToBase64(zipStore('save.json', new TextEncoder().encode(docJson))) };
-    } catch {
-      return false;
-    }
-    try {
-      const res = await fetch(`/api/v1/me/cloud-saves/${encodeURIComponent(this.slug)}`, {
-        method: 'PUT',
-        headers: this.headers(),
-        body: JSON.stringify(body),
-        keepalive: true,
-      });
-      if (res.ok) { this._setSync('synced'); return true; }
-      this._pendingSave = this._pendingSave == null ? docJson : this._pendingSave;
-      this._setSync('offline');
-      return false;
-    } catch {
-      this._pendingSave = this._pendingSave == null ? docJson : this._pendingSave;
-      this._setSync('offline');
-      return false;
-    }
+  async flushCloudSave(keepalive) {
+    const s = sdk();
+    if (!s || !this.hosted) return false;
+    return s.flushSave(keepalive === true);
   }
 
-  /* Realtime rooms (host-routed multiplayer). */
+  /* Settings KV (player preferences), debounced merge. */
+  getSettings() {
+    const s = sdk();
+    return s && this.hosted ? s.getSettings().catch(() => ({})) : Promise.resolve({});
+  }
+  patchSettings(obj) {
+    const s = sdk();
+    if (!s || !this.hosted) return Promise.resolve(null);
+    this._patch = Object.assign(this._patch || {}, obj);
+    if (this._patchTimer) clearTimeout(this._patchTimer);
+    return new Promise((resolve) => {
+      this._patchWaiters.push(resolve);
+      this._patchTimer = setTimeout(() => {
+        const body = this._patch, waiters = this._patchWaiters;
+        this._patch = null; this._patchTimer = null; this._patchWaiters = [];
+        const done = (v) => waiters.forEach((w) => w(v));
+        s.patchSettings(body).then(done, () => done(null));
+      }, PATCH_DEBOUNCE_MS);
+    });
+  }
 
+  /* Key bindings (platform controls from starhermit.txt control.* lines). */
+  loadBindings(defaults) {
+    const copy = () => Object.fromEntries(Object.entries(defaults || {}).map(([k, v]) => [k, v.slice()]));
+    const s = sdk();
+    if (!s || !this.hosted) return Promise.resolve(copy());
+    return s.loadBindings(defaults).catch(copy);
+  }
+  setControl(action, codes) {
+    const s = sdk();
+    return s && this.hosted ? s.setControl(action, codes).then(() => true, () => false) : Promise.resolve(false);
+  }
+  resetControls() {
+    const s = sdk();
+    return s && this.hosted ? s.resetControls().then(() => true, () => false) : Promise.resolve(false);
+  }
+
+  /* Realtime rooms (host-routed multiplayer) via StarHermit.realtime. */
+
+  _rt(fn) {
+    const s = sdk();
+    if (!s || !this.hosted) return Promise.resolve({ ok: false, status: 0, error: 'standalone' });
+    return fn(s.realtime).then((data) => ({ ok: true, status: data == null ? 204 : 200, data }),
+      (e) => ({ ok: false, status: e?.status || 0, error: e?.message || 'network' }));
+  }
   /** Create a room. config: { teamCount, seatsPerTeam, metadata, aiPlayers }. */
-  createRoom(config) {
-    return this.api('/api/v1/realtime/rooms', { method: 'POST', body: config });
-  }
+  createRoom(config) { return this._rt((rt) => rt.createRoom(config)); }
   /** Join any open room for this game (404 = none open). */
-  quickJoin() {
-    return this.api('/api/v1/realtime/rooms/quick-join', { method: 'POST', body: { gameSlug: this.slug, seats: 1 } });
+  async quickJoin() {
+    const r = await this._rt((rt) => rt.quickJoin({ seats: 1 }));
+    return r.ok && r.data == null ? { ok: false, status: 404, error: 'not-found' } : r; // SDK maps 404 to null
   }
   /** Host: mark the room open so quick-join can find it. */
-  openRoom(roomId) {
-    return this.api(`/api/v1/realtime/rooms/${encodeURIComponent(roomId)}/open`, { method: 'POST', body: {} });
-  }
+  openRoom(roomId) { return this._rt((rt) => rt.open(roomId)); }
   /** Host: invite a friend (userId from listFriends). */
-  inviteToRoom(roomId, userId) {
-    return this.api(`/api/v1/realtime/rooms/${encodeURIComponent(roomId)}/invites`, { method: 'POST', body: { userId } });
-  }
-  listFriends() {
-    return this.api('/api/v1/me/friends');
+  inviteToRoom(roomId, userId) { return this._rt((rt) => rt.invite(roomId, userId)); }
+  /** Accept an incoming room invite; resolves like quickJoin. */
+  acceptRoomInvite(inviteId) { return this._rt((rt) => rt.acceptInvite(inviteId)); }
+  /** [{ userId, username, online, currentGame }] with nicknames. */
+  async listFriends() {
+    const s = sdk();
+    if (!s || !this.hosted) return { ok: false, status: 0, error: 'standalone', data: [] };
+    const list = await s.friends();
+    const data = await Promise.all((Array.isArray(list) ? list : list?.items || []).map(async (f) => ({
+      ...f, name: await this.profileFor(f.userId || f.id),
+    })));
+    return { ok: true, status: 200, data };
   }
   /** Poll incoming invites (for the guest side). */
-  pollInvites() {
-    return this.api('/api/v1/realtime/rooms/invites');
-  }
+  pollInvites() { return this.api('/api/v1/realtime/rooms/invites', { retries: 0 }); }
   /** Reconnect: my rooms. */
-  myRooms() {
-    return this.api('/api/v1/realtime/rooms/mine');
-  }
+  myRooms() { return this.api('/api/v1/realtime/rooms/mine'); }
   leaveRoom(roomId) {
     return this.api(`/api/v1/realtime/rooms/${encodeURIComponent(roomId)}/leave`, { method: 'POST', body: {} });
   }
@@ -396,10 +262,7 @@ export class Platform {
    * binary frame (≤ 8 KB). Returns { send, close }.
    */
   openRoomSocket(roomId, { onMessage, onOpen, onClose } = {}) {
-    const proto = globalThis.location?.protocol === 'https:' ? 'wss:' : 'ws:';
-    const qs = new URLSearchParams({ roomId });
-    if (this.launchToken) qs.set('access_token', this.launchToken);
-    const ws = new WebSocket(`${proto}//${globalThis.location.host}/ws/v1/realtime?${qs.toString()}`);
+    const ws = new WebSocket(sdk().realtime.socketUrl(roomId));
     ws.binaryType = 'arraybuffer';
     const PREFIX_LEN = 16;
     ws.onopen = () => { try { onOpen?.(); } catch { /* ok */ } };

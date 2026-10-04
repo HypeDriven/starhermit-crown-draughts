@@ -20,7 +20,8 @@ import { lessonById, LESSONS } from '../content/lessons.js';
 import { AI_LEVELS } from '../rules/ai.js';
 import { playerStats, RULESETS } from '../rules/engine.js';
 import { DomBoard } from './boarddom.js';
-import { InputManager } from './input.js';
+import { InputManager, DEFAULT_KEYBOARD } from './input.js';
+import { platformStrings, pfmt } from './platform-i18n.js';
 import { GameController } from './gameview.js';
 import { el, button, Modal, confirmDialog } from './widgets.js';
 import * as screens from './screens.js';
@@ -60,22 +61,15 @@ export class App {
     this.applyTheme();
     await this.platform.init();
     this.platform.setTelemetryConsent(this.settings.telemetryConsent === true);
-    // Hosted: the account nickname replaces the local guest name, and the
-    // cloud slot seeds the synced save before the conflict check runs.
-    if (this.platform.hosted) {
-      this.platform.fetchProfile().then((prof) => {
-        if (prof?.name) {
-          this.profile.name = prof.name;
-          saveProfile(this.profile);
-          if (this._screen === 'title') this.go('title');
-        }
-      }).catch(() => {});
-      this.platform.loadCloudSave().then((raw) => {
-        if (!raw) return;
-        try { adoptCloudSaveDoc(JSON.parse(raw)); } catch { /* corrupt remote */ }
-        this._syncCloudSave();
-      }).catch(() => {});
-    }
+    // Signed in: the account nickname replaces the local guest name, the cloud
+    // slot seeds the synced save before the conflict check runs, platform
+    // preferences and key bindings win over the local ones.
+    this.platform.onAuth((signedIn) => {
+      if (!signedIn) this.ui.toast(platformStrings().signedOut, 'warn', 4000);
+      if (this._screen === 'title') this.go('title');
+      this._syncFromPlatform();
+    });
+    this._syncFromPlatform();
     this._wireLifecycle();
     this._applyTextSize();
     // idle attract board behind the title
@@ -618,7 +612,82 @@ export class App {
 
   // --- settings application -------------------------------------------------------
 
-  saveSettings() { saveSettings(this.settings); }
+  saveSettings() {
+    saveSettings(this.settings);
+    // Only after the platform values were read on boot, so they win.
+    if (this.platform.hosted && this._platformSettingsReady) this.platform.patchSettings(this._settingsForPlatform());
+  }
+
+  /** Preferences mirrored to the platform settings KV (bindings go to controls). */
+  _settingsForPlatform() {
+    const s = this.settings;
+    return { audio: s.audio, graphics: s.graphics, accessibility: s.accessibility, camera: s.camera, theme: s.theme, cosmetics: s.cosmetics, gamepad: s.gamepad };
+  }
+
+  _syncFromPlatform() {
+    if (!this.platform.hosted) return;
+    this.platform.fetchProfile().then((prof) => {
+      if (prof?.name) {
+        this.profile.name = prof.name;
+        saveProfile(this.profile);
+        if (this._screen === 'title') this.go('title');
+      }
+    }).catch(() => {});
+    this.platform.loadCloudSave().then((raw) => {
+      if (!raw) return;
+      try { adoptCloudSaveDoc(JSON.parse(raw)); } catch { /* corrupt remote */ }
+      this._syncCloudSave();
+    }).catch(() => {});
+    this._platformSettingsReady = false;
+    this.platform.getSettings().then((remote) => {
+      this._platformSettingsReady = true;
+      let changed = false;
+      for (const k of Object.keys(this._settingsForPlatform())) {
+        const v = remote?.[k];
+        if (v == null || typeof v !== typeof this.settings[k]) continue;
+        this.settings[k] = (v && typeof v === 'object' && !Array.isArray(v) && this.settings[k]) ? { ...this.settings[k], ...v } : v;
+        changed = true;
+      }
+      if (!changed) return;
+      saveSettings(this.settings);
+      this.input.applyGamepadOverrides(this.settings.gamepad);
+      this.audio.applySettings(this.settings.audio);
+      this.applyGraphicsSettings();
+      this.applyAccessSettings();
+      this.applyTheme();
+      this._applyTextSize();
+    }).catch(() => { this._platformSettingsReady = true; });
+    this.platform.loadBindings({ ...DEFAULT_KEYBOARD, ...this.input.keyboard }).then((b) => {
+      this.input.keyboard = b; // platform bindings win while signed in
+    }).catch(() => {});
+  }
+
+  /** Copy the StarHermit invite link and confirm with a toast. */
+  copyInviteLink() {
+    const T = platformStrings();
+    const link = this.platform.inviteLink();
+    if (!link) return;
+    const fail = () => this.ui.toast(pfmt(T.copyFail, { link }), 'info', 6000);
+    try { navigator.clipboard.writeText(link).then(() => this.ui.toast(T.copied, 'ok'), fail); } catch { fail(); }
+  }
+
+  /** Guest: accept a friend's table invite and take the seat. */
+  async acceptTableInvite(inviteId) {
+    const res = await HostedSessionClient.acceptInvite(this.platform, inviteId, { name: this.profile.name });
+    if (!res.ok) return this.ui.toast(res.error || 'Could not join', 'warn');
+    this._enterTableRoom(res.client);
+  }
+
+  async _enterTableRoom(client) {
+    this.hostedClient = client;
+    this.hostedClient.connect();
+    this._wireHostedOver();
+    await this.hostedClient.refresh();
+    this.go('table-room', this.hostedClient);
+    this.hostedClient.on('state', () => {
+      if (this.hostedClient.phase === 'active' && this._screen !== 'game') this._enterHostedGame();
+    });
+  }
   saveProfile() { saveProfile(this.profile); }
 
   applyAudioSettings() {

@@ -414,8 +414,9 @@ export class GameController {
           this.app.toggleDomBoard();
           this.app.ui.announce('HTML board shown. Arrow keys move the cursor; Enter selects.');
         }
-        if (action === 'up') b.moveCursor(1, 0);       // up = toward far edge (r+1)
-        else if (action === 'down') b.moveCursor(-1, 0);
+        // The pinned HTML board draws rows from top to bottom.
+        if (action === 'up') b.moveCursor(-1, 0);
+        else if (action === 'down') b.moveCursor(1, 0);
         else if (action === 'left') b.moveCursor(0, -1);
         else b.moveCursor(0, 1);
         this.app.audio.scrollTick();
