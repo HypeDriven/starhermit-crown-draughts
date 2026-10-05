@@ -171,6 +171,8 @@ overlays: pause · settings · profile · help · confirm dialogs · consent ban
 
 **Desktop (≥1024 px).** Scene full-bleed. Top bar: objective title and subtitle left; turn banner (house-coloured left border), clocks, thinking indicator and Pause right. Left rail (250 px): lesson coach, Progress card (par, move limit, piece cap, draw clock), Moves log. Right rail (230 px): Actions (Undo, Hint, Offer draw, Resign, Camera, HTML board), Houses (name, pieces ⬤, crowns ♛, active highlight), Chat when hosted. Menus are centred columns of at most 960 px over the live scene; `.screen` children keep `margin: auto` so overflowing content starts at the top instead of clipping.
 
+**Large screens (above 1600×1000).** `ui-scale.js` sets `--ui-scale` on `<html>` (1 up to a 1600×1000 viewport, then the smaller of width/1600 and height/1000, capped at 2.5; 2560×1440 → 1.44, 3840×2160 → 2.16). The DOM layers — `#screens`, `#game-ui` (top bar, rails, tray, coach dock, DOM board), `#overlay-root` (modals, consent banner), `#toast-region`, the FPS meter and the countdown — are CSS-`zoom`ed by it with their vw/vh lengths divided by it, so menus and HUD grow proportionally; the full-viewport 3D scene is not zoomed and already frames the board from the viewport size.
+
 **Compact desktop / tablet (≤1023 px).** Rails become off-screen drawers and the bottom tray (Undo, Hint, Draw, Pause) appears.
 
 **Portrait mobile (≤760 px).** Rails hidden; tray at the bottom above the safe area; the DOM board sits above the tray; mode cards collapse to name + meta; the journey grid is 4 columns; the title emblem shrinks to 88 px. The camera rig pulls back with `fitScale` so the whole board fits any aspect.
