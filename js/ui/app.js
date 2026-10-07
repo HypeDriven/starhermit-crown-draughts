@@ -525,6 +525,7 @@ export class App {
   showResults(over, config, outcome) {
     const active = this.$screens.querySelector('[data-screen="results"]');
     screens.buildResults(this, active, { over, config, outcome });
+    this._postHighScore(active, over, config, outcome);
     this.go('results');
     if (outcome.stars > 0) this.audio.starAward();
     if (outcome.recordBroken) this.audio.newRecord();
@@ -532,6 +533,23 @@ export class App {
     if (outcome.mastery?.length) this.audio.masteryUnlock();
     if (config.mode === 'daily' && outcome.iWon && this.progress.stats.dailyStreak >= 3) this.audio.streak();
     this.announce(`${over.winner === null ? 'Draw' : outcome.iWon ? 'Victory' : 'Round over'}. ${over.reasonText}`, true);
+  }
+
+  // Signed in, a finished solo round against the AI (not a lesson, Pass & Play
+  // or a hosted table) posts the player's total to the platform high-score
+  // board; the results screen shows the rank line.
+  _postHighScore(root, over, config, outcome) {
+    const line = root.querySelector('.result-lb');
+    if (!line) return;
+    const solo = config.mode !== 'hosted' && config.mode !== 'lesson' && !outcome.localMultiplayer;
+    const brk = over.breakdowns && over.breakdowns[outcome.mySeat];
+    if (!this.platform.hosted || !solo || !brk) { line.hidden = true; return; }
+    const T = platformStrings();
+    line.hidden = false;
+    line.textContent = T.lbPosting;
+    this.platform.postHighScore(Math.max(0, Math.round(brk.total))).then((r) => {
+      line.textContent = !r.posted ? T.lbNotPosted : r.rank ? pfmt(T.lbRank, { rank: r.rank }) : T.lbPosted;
+    });
   }
 
   retryLast() {

@@ -4,7 +4,7 @@
 **Genre:** turn-based abstract board strategy. **Players:** 1 (vs AI), 2–4 pass-and-play, 2–4 hosted. **Session:** 2–5 min per lesson, 3–10 min per journey stage, 5–25 min per full game.
 **Platforms:** desktop and mobile browsers (portrait and landscape), keyboard, mouse, touch and gamepad.
 **Rendering:** a Three.js scene (vendored `three.module.js`, procedural geometry and canvas textures, no external 3D assets) with a fully playable semantic HTML board and HUD layered over it. Every rule, screen and control works with WebGL unavailable.
-**Version:** `starhermit.txt` declares `version=1.0.0`, `content-version=1`, `launch=index.html`, `server=server.js`, `cover=coverart.png`.
+**Version:** `starhermit.txt` declares `version=1.0.0`, `content-version=1`, `launch=index.html`, `server=score-script.js`, `cover=coverart.png`.
 
 | Path | Responsibility |
 |---|---|
@@ -24,7 +24,8 @@
 | `js/render/*.js` | `RenderFacade` (lighting, post-processing chain, adaptive resolution), `BoardView`, `CameraRig`, `Garden`, `FxPool`, procedural `textures.js`, and `gfx.js` — the pure graphics quality model (presets, per-category overrides, GPU detection, cost summary). |
 | `vendor/` | `three.module.js` + `three.core.js` (r180) and `three/addons/` — the r180 (0.180.0) post-processing passes, shaders and `RoomEnvironment` they import, resolved through the import map in `index.html`. |
 | `js/ui/*.js` | `App` orchestrator, `screens.js` builders, `GameController`, `InputManager`, `DomBoard`, `widgets.js`, `gfx-i18n.js` (Graphics panel strings in nine locales). |
-| `server.js` | `createAuthoritativeEngine()` (the StarHermit game script shape) plus the `--dev` static + `/api/v1` + SSE harness. |
+| `score-script.js` | StarHermit platform script (`server=score-script.js`): range-checks a finished solo round's total and posts it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`). |
+| `server.js` | Local dev only: `createAuthoritativeEngine()` plus the `--dev` static + `/api/v1` + SSE harness. |
 | `tests/` | `node --test` suites for engine, AI, content, session, server, graphics model; `e2e.mjs` browser playthrough. |
 | `tools/` | `check.mjs` (syntax sweep), `bake-content.mjs` (regenerates `js/content/baked.js`). Never served. |
 | `sfx/` | 47 Opus clips, `manifest.txt` (canonical event binding), `manifest.json` (generator input), `manifest.md` (generator output). |
@@ -265,7 +266,7 @@ The shipped build is English only except the StarHermit strings (§11) and the G
 
 Conventions follow https://wiki.starhermit.com/ (manifest, launch token, `/api/v1/time`, game script). All platform I/O goes through `starhermit-sdk.js` — an unmodified copy of `tools/starhermit-sdk.js`, loaded as a classic script before the `js/main.js` module. `js/core/platform.js` (`Platform`) is a thin adapter over `window.StarHermit` that keeps the game's API.
 
-- **Packaging:** `starhermit.txt` with `name`, `launch=index.html`, `owner`, `server=server.js`, `cover`, `version`, `ruleset-engine`, `content-version`, and one `control.<action>=<Code>[+<Code>] | <Label>` line per `DEFAULT_KEYBOARD` action (confirm, cancel, up/down/left/right, pause, undo, hint, camera, mute, board, help, skip). `tests/` and `tools/` are dev-only; the dev server refuses to serve them and any dotfile.
+- **Packaging:** `starhermit.txt` with `name`, `launch=index.html`, `owner`, `server=score-script.js`, `cover`, `version`, `ruleset-engine`, `content-version`, and one `control.<action>=<Code>[+<Code>] | <Label>` line per `DEFAULT_KEYBOARD` action (confirm, cancel, up/down/left/right, pause, undo, hint, camera, mute, board, help, skip). `tests/` and `tools/` are dev-only; the dev server refuses to serve them and any dotfile.
 - **Launch, renewal and sign-in:** `StarHermit.init()` reads `#game_token=` (library; optional `&session_id=`) or `#access_token=` (sign-in return), strips it, takes the slug from `game_scope` and renews the token before expiry. Signed-in ("hosted") mode lasts while a token is valid; if renewal is refused the game toasts that it is now playing on this device, the title row returns to the sign-in button, and play continues locally. On `*.starhermit.com` without a token the title shows "Sign in with StarHermit" (`StarHermit.signIn()`); it is hidden when signed in and when running locally.
 - **Identity:** the profile name is the nickname from `StarHermit.profile()` (`Player <id>` fallback), shown on the title ("Playing as …") and used as the local profile name; standalone keeps the local "Guest Gardener".
 - **Time:** signed in, `GET /api/v1/time` is probed once at boot; the round-trip-adjusted offset drives `serverNow()`, the daily countdown and presence timestamps. Standalone uses the local clock.
@@ -274,9 +275,10 @@ Conventions follow https://wiki.starhermit.com/ (manifest, launch token, `/api/v
 - **Controls:** keyboard bindings load with `StarHermit.loadBindings` over the local ones (platform wins); rebinding in Settings → Controls also calls `setControl`, and "Reset to defaults" calls `resetControls`. Help lists the effective keys.
 - **Invite link:** when signed in the title shows "Invite a friend", which copies `StarHermit.inviteLink()` and confirms with a toast (or shows the link if copying is blocked).
 - **Multiplayer:** realtime rooms, host-routed, through `StarHermit.realtime`. Host: `createRoom` (one team, `seatsPerTeam` from the ruleset, metadata, empty seats play as `apprentice` AI at start), `open` to list publicly; the table room lists StarHermit friends (`StarHermit.friends()`, online first, nicknames) with an Invite button each (`realtime.invite`). Guest: `quickJoin` (`{gameSlug, seats:1}`; 404 → "no open tables"), or the lobby's **Table invites** list (`GET /api/v1/realtime/rooms/invites`) with a Join button per invite (`realtime.acceptInvite`). Transport `realtime.socketUrl(roomId)` — binary frames carry the 16-byte sender prefix (stripped on receipt; guest→host, host→everyone; 8 KB cap), text frames are server control (roster/presence). An unexpected socket close reconnects with backoff (1 s doubling to 30 s); every reconnect first calls `StarHermit.renewForReconnect()` and rebuilds the URL from the current token ('retry' backs off and renews again without reopening the old URL). When renewal is refused ('relaunch', or the SDK's `auth` sign-out with reason `expired` at any time) the socket stops and a **Your session expired** dialog (all nine locales) offers **Back to StarHermit**, which calls `StarHermit.relaunch()` from the click, and **Keep playing here**, which leaves any hosted table for the title screen. The host runs the authoritative `Session` locally, broadcasts serialized snapshots, validates guest inputs through the same engine, relays chat with attribution, reports via `POST /rooms/{id}/result` and leaves via `POST /rooms/{id}/leave`. Join codes and public browsing do not exist on the platform — the lobby quick-joins open tables and says so.
-- **Game script:** `server.js` exports `createAuthoritativeEngine({ now, persist })` — the authoritative-engine shape used by the dev harness (`--dev`) and the node tests. It is not a platform session script, so platform sessions (`connect`), matchmaking queues, session invites, session chat and replays are not used; hosted play is host-routed over realtime rooms.
-- **Not used:** platform leaderboards and achievements (the game's server reports none; achievements, ratings and boards are local documents), voice rooms. Presence/telemetry have no launch-token endpoints and stay inert no-ops.
-- **Localization:** the StarHermit strings (sign-in, invite, toasts, friends picker, table invites) live in `js/ui/platform-i18n.js` for all nine locales and follow the Graphics locale picker.
+- **Game script:** the platform runs `score-script.js` (see Leaderboard). The local `server.js` exports `createAuthoritativeEngine({ now, persist })` — the authoritative-engine shape used by the dev harness (`--dev`) and the node tests. It is not a platform session script, so platform sessions (`connect`), matchmaking queues, session invites, session chat and replays are not used; hosted play is host-routed over realtime rooms.
+- **Leaderboard:** signed in, every finished solo round against the AI (Journey, Daily, Practice, Challenge — not lessons, Pass & Play or hosted tables) posts the player's breakdown total through `StarHermit.submitScores` (a practice session whose `score-script.js` posts it to the `high-score` board: integer, higher is better, 0–20,000), and the results screen shows "Leaderboard rank: #N" (or posted / not posted) under the facts line. Standalone play posts nothing and shows no line.
+- **Not used:** platform achievements (achievements, ratings and the local boards are local documents), voice rooms. Presence/telemetry have no launch-token endpoints and stay inert no-ops.
+- **Localization:** the StarHermit strings (sign-in, invite, toasts, friends picker, table invites, leaderboard line) live in `js/ui/platform-i18n.js` for all nine locales and follow the Graphics locale picker.
 - **Standalone:** without a token the game makes no StarHermit or `/api` calls at all.
 
 ## 12. Technical architecture
@@ -334,7 +336,7 @@ QA bar (checkable): every mode reachable from the visible UI on desktop and phon
 ## Design intent not yet implemented
 
 - Ship the nine required locales (en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT) through a string table, chosen from the host profile or `navigator.language`, with 30 % expansion allowance.
-- Platform leaderboards and achievement submission; voice rooms; friend-invite acceptance UI in the lobby.
+- Platform achievement submission; voice rooms; friend-invite acceptance UI in the lobby.
 - A drawer toggle for the rails on tablet widths, and a truce illustration on results.
 - Author `TERMINAL_REASON_TEXT['move-limit-failed']` and play `levelFail` for it.
 - Theme-specific music roots already exist per theme; a dedicated authored intensity stem for endgames is intended.

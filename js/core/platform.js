@@ -333,6 +333,23 @@ export class Platform {
   /* Presence and telemetry: no per-game endpoints exist for launch tokens
    * (wiki); these remain inert no-ops so callers need no changes. */
 
+  /** Post a finished solo round's total to the StarHermit `high-score` board
+   *  (score-script.js) via StarHermit.submitScores. Resolves {posted, rank}:
+   *  rank is the player's place on that board, or null. Signed out: no calls. */
+  async postHighScore(total) {
+    const s = sdk();
+    if (!s || !this.hosted) return { posted: false, rank: null };
+    try {
+      const keys = await s.submitScores({ 'high-score': total });
+      if (!keys || keys.indexOf('high-score') < 0) return { posted: false, rank: null };
+      try {
+        const r = await s.leaderboard('high-score', { pageSize: 100 });
+        const me = ((r && r.items) || []).find((i) => i.userId === s.userId);
+        return { posted: true, rank: me ? me.rank : null };
+      } catch { return { posted: true, rank: null }; }
+    } catch { return { posted: false, rank: null }; }
+  }
+
   startPresence() { /* no hosted presence endpoint */ }
   stopPresence() { /* no hosted presence endpoint */ }
   setTelemetryConsent(v) {

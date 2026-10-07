@@ -516,6 +516,7 @@ export function buildResults(app, root, { over, config, outcome }) {
     }
     wrap.appendChild(list);
   }
+  wrap.appendChild(el('p', { class: 'result-facts result-lb', role: 'status', hidden: true }));
   const actions = el('div', { class: 'setup-actions' });
   if (outcome.nextAction) {
     actions.appendChild(button(outcome.nextAction.label, outcome.nextAction.fn, { kind: 'primary' }));
