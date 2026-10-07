@@ -70,7 +70,8 @@ export function confirmDialog(root, { title, body, confirmLabel = 'Confirm', dan
     if (body) modal.box.appendChild(el('p', { text: body, class: 'modal-body' }));
     const row = el('div', { class: 'modal-actions' });
     row.appendChild(button('Cancel', () => { audio.uiBack(); modal.close(); resolve(false); }));
-    row.appendChild(button(confirmLabel, () => { audio.uiConfirm(); modal.close(); resolve(true); }, { kind: danger ? 'danger' : 'primary' }));
+    // resolve before close(): close() fires onClose, which resolves false.
+    row.appendChild(button(confirmLabel, () => { audio.uiConfirm(); resolve(true); modal.close(); }, { kind: danger ? 'danger' : 'primary' }));
     modal.box.appendChild(row);
     row.querySelector('.btn-danger, .btn-primary')?.focus();
   });

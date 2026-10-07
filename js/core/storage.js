@@ -193,12 +193,15 @@ export function loadCloudSave() {
 export function adoptCloudSaveDoc(doc) {
   writeRaw('cloudsave', JSON.stringify(doc));
 }
-export function writeCloudSave(progress, parentId) {
+export function writeCloudSave(progress, parentId, force = false) {
   const doc = writeDoc('cloudsave', progress, parentId);
-  // Mirror to the platform slot when hosted (debounced there).
+  // Mirror to the platform slot when hosted (debounced there), but only once
+  // the start-up load/compare is done (`cloudReady`) or when that compare
+  // itself pushes (`force`): an earlier push would queue a stale doc in the
+  // SDK that could overwrite a newer cloud save.
   try {
     const p = globalThis.window?.CBPlatform || globalThis.CBPlatform;
-    if (p && p.hosted) p.writeCloudSave(JSON.stringify(doc));
+    if (p && p.hosted && (force || p.cloudReady)) p.writeCloudSave(JSON.stringify(doc));
   } catch { /* mirror errors never break saves */ }
   return doc;
 }
@@ -217,7 +220,9 @@ export function compareSaves(localDoc, cloudDoc) {
   if (JSON.stringify(localDoc.payload) === JSON.stringify(cloudDoc.payload)) {
     return { status: 'same', local: localDoc, cloud: cloudDoc };
   }
-  if (localDoc.parentId === cloudDoc.id || isDescendant(localDoc, cloudDoc)) {
+  // A cloud doc mirrors the progress doc named by its parentId, so a local doc
+  // sharing that parent is the next save after the one that was uploaded.
+  if (localDoc.parentId === cloudDoc.id || (cloudDoc.parentId && localDoc.parentId === cloudDoc.parentId) || isDescendant(localDoc, cloudDoc)) {
     return { status: 'local-ahead', local: localDoc, cloud: cloudDoc };
   }
   if (cloudDoc.parentId === localDoc.id || isDescendant(cloudDoc, localDoc)) {

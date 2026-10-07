@@ -77,7 +77,8 @@ export class App {
     this.go('title');
     this._checkResumeOffer();
     this._maybeAskConsent();
-    this._syncCloudSave();
+    // Signed in, the compare waits for the cloud slot (_syncFromPlatform).
+    if (!this.platform.hosted) this._syncCloudSave();
     this.platform.track('start', { mode: 'boot' });
   }
 
@@ -633,11 +634,23 @@ export class App {
         if (this._screen === 'title') this.go('title');
       }
     }).catch(() => {});
-    this.platform.loadCloudSave().then((raw) => {
-      if (!raw) return;
-      try { adoptCloudSaveDoc(JSON.parse(raw)); } catch { /* corrupt remote */ }
-      this._syncCloudSave();
-    }).catch(() => {});
+    // Cloud pushes are held (platform.cloudReady) until the slot has been
+    // loaded and compared: progress saved meanwhile stays local and is
+    // reconciled here, so a stale local doc never overwrites a newer cloud one.
+    this.platform.cloudReady = false;
+    this.platform.loadCloudSave().then(async (raw) => {
+      let remote = null;
+      try { remote = raw ? JSON.parse(raw) : null; } catch { /* corrupt remote */ }
+      if (remote) {
+        adoptCloudSaveDoc(remote);
+        await this._syncCloudSave(true);
+      } else {
+        // Empty slot: seed it with local progress (a progress doc only exists
+        // once something was earned).
+        const doc = loadProgressDoc();
+        if (doc) writeCloudSave(doc.payload, doc.id, true);
+      }
+    }).catch(() => {}).finally(() => { this.platform.cloudReady = true; });
     this._platformSettingsReady = false;
     this.platform.getSettings().then((remote) => {
       this._platformSettingsReady = true;
@@ -861,7 +874,9 @@ export class App {
     this.$overlay.appendChild(banner);
   }
 
-  async _syncCloudSave() {
+  /** Compare local progress with the cloud mirror; `push` uploads a winning
+   *  local doc even while start-up pushes are still held. */
+  async _syncCloudSave(push = false) {
     const localDoc = loadProgressDoc();
     const cloudDoc = loadCloudSave();
     const cmp = compareSaves(localDoc, cloudDoc);
@@ -869,8 +884,9 @@ export class App {
       archiveSave(localDoc);
       adoptProgressDoc(cmp.cloud);
       this.progress = loadProgress();
+      if (this._screen === 'title') this.go('title');
     } else if (cmp.status === 'local-ahead' && localDoc) {
-      writeCloudSave(localDoc.payload, localDoc.id);
+      writeCloudSave(localDoc.payload, localDoc.id, push);
     } else if (cmp.status === 'conflict') {
       archiveSave(cmp.local);
       archiveSave(cmp.cloud);
@@ -882,8 +898,9 @@ export class App {
       if (useCloud && cmp.cloud) {
         adoptProgressDoc(cmp.cloud);
         this.progress = loadProgress();
+        if (this._screen === 'title') this.go('title');
       } else if (localDoc) {
-        writeCloudSave(localDoc.payload, localDoc.id);
+        writeCloudSave(localDoc.payload, localDoc.id, push);
       }
     }
   }

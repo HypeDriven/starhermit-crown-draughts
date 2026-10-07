@@ -29,6 +29,7 @@ export class Platform {
     this.mode = 'standalone';        // 'hosted' while signed in
     this.profile = null;             // { name } for the signed-in player
     this.sync = 'offline';           // offline | saving | synced (cloud slot)
+    this.cloudReady = false;         // set by the app once the start-up cloud load/compare is done
     this.timeOffsetMs = 0;           // serverNow = Date.now() + offset
     this.timeSyncedAt = 0;
     this.telemetryConsent = false;
@@ -315,3 +316,5 @@ export class Platform {
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 export const platform = new Platform();
+// storage.js mirrors cloud-save writes through this global (no import cycle).
+globalThis.CBPlatform = platform;
