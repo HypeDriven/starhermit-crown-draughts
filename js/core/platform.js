@@ -9,7 +9,8 @@
 // open, friend invites (`StarHermit.friends()` + `realtime.invite`), incoming
 // room invites (`GET /rooms/invites`, `realtime.acceptInvite`), reconnect via
 // `GET /rooms/mine`, results via `POST /rooms/{id}/result`, leave via
-// `POST /rooms/{id}/leave`. Transport is `realtime.socketUrl(roomId)`: binary
+// `POST /rooms/{id}/leave`. Transport is `realtime.socketUrl(roomId)` (reconnects
+// renew the token first; see openRoomSocket): binary
 // frames carry a 16-byte sender-participant prefix (stripped on receipt;
 // guest→host only, host→everyone), JSON text frames are control messages.
 //
@@ -55,7 +56,8 @@ export class Platform {
         const was = this.hosted;
         this.mode = a && a.signedIn && s.slug ? 'hosted' : 'standalone';
         if (!this.hosted) { this.profile = null; this._setSync('offline'); }
-        if (was !== this.hosted) for (const fn of this._authListeners) { try { fn(this.hosted); } catch { /* ok */ } }
+        const reason = (a && a.reason) || null; // 'expired' once renewal is refused
+        if (was !== this.hosted) for (const fn of this._authListeners) { try { fn(this.hosted, reason); } catch { /* ok */ } }
       });
       try {
         globalThis.addEventListener?.('pagehide', () => this.flushCloudSave(true));
@@ -80,6 +82,8 @@ export class Platform {
   canSignIn() { return !!sdk()?.canSignIn(); }
   signIn() { return !!sdk()?.signIn(); }
   inviteLink() { return this.hosted ? sdk()?.inviteLink() || null : null; }
+  /** Back to the launcher (or sign-in) for a fresh token. Call from a click. */
+  relaunch() { return !!sdk()?.relaunch(); }
 
   async refreshToken() { const s = sdk(); return s ? !!(await s.refresh()) : false; }
 
@@ -260,39 +264,69 @@ export class Platform {
    * Open the realtime room socket. Binary frames carry a 16-byte sender
    * participant prefix (stripped here; guest→host only, host→everyone); text
    * frames are JSON control messages from the server. send(msg) emits a JSON
-   * binary frame (≤ 8 KB). Returns { send, close }.
+   * binary frame (≤ 8 KB). An unexpected close reconnects with backoff
+   * (1 s doubling to 30 s); every reconnect first renews the launch token
+   * (StarHermit.renewForReconnect) and rebuilds the URL from the current token,
+   * because a refused handshake looks like a plain drop (1006). 'retry' backs
+   * off and renews again; 'relaunch' stops for good and calls onAuthLost().
+   * Returns { send, close }.
    */
-  openRoomSocket(roomId, { onMessage, onOpen, onClose } = {}) {
-    const ws = new WebSocket(sdk().realtime.socketUrl(roomId));
-    ws.binaryType = 'arraybuffer';
+  openRoomSocket(roomId, { onMessage, onOpen, onClose, onAuthLost } = {}) {
+    const s = sdk();
     const PREFIX_LEN = 16;
-    ws.onopen = () => { try { onOpen?.(); } catch { /* ok */ } };
-    ws.onmessage = (ev) => {
-      try {
-        if (typeof ev.data === 'string') {
-          onMessage?.({ control: JSON.parse(ev.data) });
-          return;
-        }
-        const bytes = new Uint8Array(ev.data);
-        // Strip the 16-byte sender participant prefix, then parse JSON.
-        const msg = JSON.parse(new TextDecoder().decode(bytes.slice(PREFIX_LEN)));
-        onMessage?.({ from: bytes.slice(0, PREFIX_LEN), msg });
-      } catch { /* ignore malformed frames */ }
+    let ws = null, closed = false, delay = 1000, timer = null;
+    const later = (fn) => { timer = setTimeout(fn, delay); delay = Math.min(delay * 2, 30000); };
+    const reconnect = () => {
+      timer = null;
+      if (closed) return;
+      Promise.resolve(s.renewForReconnect()).then((r) => {
+        if (closed) return;
+        if (r === 'renewed') open();
+        else if (r === 'retry') later(reconnect);
+        else { closed = true; try { onAuthLost?.(); } catch { /* ok */ } }
+      }, () => { if (!closed) later(reconnect); });
     };
-    ws.onclose = (ev) => { try { onClose?.(ev); } catch { /* ok */ } };
-    ws.onerror = () => { /* surfaced via onclose */ };
+    const open = () => {
+      ws = new WebSocket(s.realtime.socketUrl(roomId)); // reads the current token
+      ws.binaryType = 'arraybuffer';
+      ws.onopen = () => { delay = 1000; try { onOpen?.(); } catch { /* ok */ } };
+      ws.onmessage = (ev) => {
+        try {
+          if (typeof ev.data === 'string') {
+            onMessage?.({ control: JSON.parse(ev.data) });
+            return;
+          }
+          const bytes = new Uint8Array(ev.data);
+          // Strip the 16-byte sender participant prefix, then parse JSON.
+          const msg = JSON.parse(new TextDecoder().decode(bytes.slice(PREFIX_LEN)));
+          onMessage?.({ from: bytes.slice(0, PREFIX_LEN), msg });
+        } catch { /* ignore malformed frames */ }
+      };
+      ws.onclose = (ev) => {
+        try { onClose?.(ev); } catch { /* ok */ }
+        const code = ev && ev.code;
+        if (closed || code === 1000 || code === 4403 || code === 4404) return;
+        later(reconnect);
+      };
+      ws.onerror = () => { /* surfaced via onclose */ };
+    };
+    open(); // first connect: the launch token is fresh, no renewal needed
     return {
       send(msg) {
         try {
           const data = new TextEncoder().encode(JSON.stringify(msg));
           if (data.length > 8192) return false; // 8 KB per-frame cap
-          if (ws.readyState === 1) { ws.send(data); return true; }
+          if (ws && ws.readyState === 1) { ws.send(data); return true; }
           return false;
         } catch {
           return false;
         }
       },
-      close() { try { ws.close(); } catch { /* ok */ } },
+      close() {
+        closed = true;
+        if (timer) { clearTimeout(timer); timer = null; }
+        try { ws?.close(1000); } catch { /* ok */ }
+      },
     };
   }
 

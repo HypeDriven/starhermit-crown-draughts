@@ -64,8 +64,9 @@ export class App {
     // Signed in: the account nickname replaces the local guest name, the cloud
     // slot seeds the synced save before the conflict check runs, platform
     // preferences and key bindings win over the local ones.
-    this.platform.onAuth((signedIn) => {
-      if (!signedIn) this.ui.toast(platformStrings().signedOut, 'warn', 4000);
+    this.platform.onAuth((signedIn, reason) => {
+      if (!signedIn && reason === 'expired') this.showSessionExpired();
+      else if (!signedIn) this.ui.toast(platformStrings().signedOut, 'warn', 4000);
       if (this._screen === 'title') this.go('title');
       this._syncFromPlatform();
     });
@@ -415,6 +416,34 @@ export class App {
 
   _wireHostedOver() {
     this.hostedClient.on('over', (over) => this._onGameOver(over));
+    this.hostedClient.on('authLost', () => this.showSessionExpired());
+  }
+
+  /** The launch token can no longer be renewed: say so and offer the way back
+   *  to StarHermit (relaunch must run from the click). Closing it leaves any
+   *  hosted table and keeps playing on this device. */
+  showSessionExpired() {
+    if (this._expiredModal?.backdrop.isConnected) return;
+    const T = platformStrings();
+    const modal = new Modal(this.$overlay, {
+      title: T.expiredTitle,
+      onClose: () => {
+        this._expiredModal = null;
+        if (this.hostedClient) this.exitToTitle();
+      },
+    });
+    this._expiredModal = modal;
+    modal.box.classList.add('modal-expired');
+    modal.box.appendChild(el('h2', { text: T.expiredTitle }));
+    modal.box.appendChild(el('p', { text: T.expiredBody, class: 'modal-body' }));
+    const row = el('div', { class: 'modal-actions' });
+    row.appendChild(button(T.keepPlaying, () => { audio.uiBack(); modal.close(); }));
+    row.appendChild(button(T.relaunch, () => {
+      audio.uiConfirm();
+      if (!this.platform.relaunch()) this.ui.toast(T.relaunchFailed, 'warn', 5000);
+    }, { kind: 'primary', class: 'btn btn-primary btn-relaunch' }));
+    modal.box.appendChild(row);
+    row.querySelector('.btn-relaunch')?.focus();
   }
 
   _enterHostedGame() {

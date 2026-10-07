@@ -13,7 +13,7 @@ const JWT = `${b64u({ alg: 'none' })}.${b64u({ sub: 'u-12345678', game_scope: SL
 // Clear the SDK's renewal timer so the test process can exit.
 test.afterEach(() => { globalThis.StarHermit?.signOut(); });
 
-async function boot(hash) {
+async function boot(hash, { renew } = {}) {
   const calls = [];
   const store = { save: null, settings: {} };
   globalThis.fetch = async (url, init = {}) => {
@@ -38,6 +38,7 @@ async function boot(hash) {
     if (url.endsWith('/api/v1/realtime/rooms/r1/invites')) { store.invite = JSON.parse(init.body); return json({ id: 'i1' }); }
     if (url.endsWith('/api/v1/me/friends')) return json([{ userId: 'u-12345678', online: true }]);
     if (url.endsWith('/api/v1/time')) return json({ now: 1234 });
+    if (renew && url.endsWith(`/api/v1/games/${SLUG}/launch-token`) && method === 'POST') return renew();
     return new Response('', { status: 404 });
   };
   const location = { hash, search: '', pathname: '/', hostname: 'localhost', href: 'http://localhost/' + hash, origin: 'http://localhost' };
@@ -127,4 +128,97 @@ test('standalone: no token means no fetch at all', async () => {
   assert.equal(await P.syncTime(), false);
   assert.deepEqual(P.headers(), { 'content-type': 'application/json' });
   assert.equal(calls.length, 0);
+});
+
+// Realtime reconnect: a refused handshake (expired token) closes as 1006 just
+// like a network drop, so every reconnect renews the launch token first and
+// rebuilds the URL from the current token.
+const JWT2 = `${b64u({ alg: 'none' })}.${b64u({ sub: 'u-12345678', game_scope: SLUG, exp: Math.floor(Date.now() / 1000) + 7200, n: 2 })}.sig`;
+async function bootSockets(renewals) {
+  const renewCalls = [];
+  const env = await boot('#game_token=' + JWT, {
+    renew() {
+      const r = renewals[renewCalls.length] || 'ok';
+      renewCalls.push(r);
+      if (r === 'ok') return new Response(JSON.stringify({ token: JWT2 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response('', { status: r === 'refused' ? 401 : 503 });
+    },
+  });
+  const sockets = [];
+  globalThis.WebSocket = class { constructor(url) { this.url = url; this.readyState = 0; sockets.push(this); } send() {} close() { this.readyState = 3; } };
+  await env.P.init();
+  return { ...env, sockets, renewCalls };
+}
+const settle = async () => { for (let i = 0; i < 20; i++) await new Promise((r) => setImmediate(r)); };
+const drop = (ws) => { ws.readyState = 3; ws.onclose({ code: 1006 }); };
+
+test('reconnect renews the token first and opens with the new one', async (t) => {
+  const { P, sockets, renewCalls } = await bootSockets(['ok']);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const sock = P.openRoomSocket('r1', {});
+  assert.equal(sockets.length, 1);
+  assert.equal(renewCalls.length, 0, 'first connect needs no renewal');
+  assert.match(sockets[0].url, new RegExp('access_token=' + JWT.replace(/\./g, '\\.')));
+  drop(sockets[0]);
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.deepEqual(renewCalls, ['ok']);
+  assert.equal(sockets.length, 2);
+  assert.match(sockets[1].url, new RegExp('access_token=' + JWT2.replace(/\./g, '\\.')));
+  sock.close();
+});
+
+test("reconnect on 'retry' backs off without reopening the old URL", async (t) => {
+  const { P, sockets, renewCalls } = await bootSockets(['down', 'ok']);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const sock = P.openRoomSocket('r1', {});
+  drop(sockets[0]);
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.deepEqual(renewCalls, ['down']);
+  assert.equal(sockets.length, 1, 'no socket reopened on retry');
+  t.mock.timers.tick(2000); // backoff doubled
+  await settle();
+  assert.deepEqual(renewCalls, ['down', 'ok']);
+  assert.equal(sockets.length, 2);
+  assert.ok(sockets[1].url.includes(JWT2));
+  sock.close();
+});
+
+test("reconnect on 'relaunch' stops and surfaces the session-expired UI", async (t) => {
+  const { P, sockets, renewCalls } = await bootSockets(['refused']);
+  const { HostedSessionClient } = await import('../js/core/hosted.js');
+  const reasons = [];
+  P.onAuth((signedIn, reason) => reasons.push([signedIn, reason]));
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const client = new HostedSessionClient(P, { roomId: 'r1', seat: 0 });
+  let authLost = 0;
+  client.on('authLost', () => authLost++);
+  client.connect();
+  drop(sockets[0]);
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.deepEqual(renewCalls, ['refused']);
+  assert.equal(authLost, 1, 'hosted client tells the app (which shows "Back to StarHermit")');
+  assert.deepEqual(reasons, [[false, 'expired']], 'app hears the expired sign-out');
+  t.mock.timers.tick(60000);
+  await settle();
+  assert.equal(sockets.length, 1, 'never reconnects after relaunch');
+  assert.equal(renewCalls.length, 1);
+});
+
+test('session-expired strings exist in every locale', async () => {
+  const { PLATFORM_STRINGS } = await import('../js/ui/platform-i18n.js');
+  for (const [loc, T] of Object.entries(PLATFORM_STRINGS)) {
+    for (const k of ['expiredTitle', 'expiredBody', 'relaunch', 'keepPlaying', 'relaunchFailed']) assert.ok(T[k], `${loc}.${k}`);
+  }
+});
+
+test('relaunch goes through StarHermit.relaunch', async () => {
+  const { P } = await boot('#game_token=' + JWT);
+  await P.init();
+  let called = 0;
+  globalThis.StarHermit.relaunch = () => { called++; return true; };
+  assert.equal(P.relaunch(), true);
+  assert.equal(called, 1);
 });

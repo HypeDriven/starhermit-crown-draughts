@@ -137,7 +137,10 @@ export class HostedSessionClient extends Emitter {
     this._socket = this.platform.openRoomSocket(this.roomId, {
       onOpen: () => {
         if (!this.isHost && this._guestName) this._socket.send({ t: 'hello', name: this._guestName });
-        if (this.isHost) this._broadcastLobby();
+        if (this.isHost) {
+          this._broadcastLobby();
+          if (this._session) this._broadcastSnapshot(); // a reconnect catches guests up
+        }
       },
       onMessage: ({ control, msg }) => {
         if (control) return this._onControl(control);
@@ -147,6 +150,8 @@ export class HostedSessionClient extends Emitter {
         for (const p of this.players) p.connected = false;
         this.emit('players', this.players);
       },
+      // Token renewal refused on reconnect: the table is gone for good.
+      onAuthLost: () => this.emit('authLost'),
     });
   }
 

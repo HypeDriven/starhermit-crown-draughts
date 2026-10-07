@@ -375,11 +375,12 @@ async function platformPass(viewport, tag) {
     if (u.pathname.endsWith('/realtime/rooms/invites')) return json([{ id: 'inv1', fromUserId: 'u-friend' }]);
     if (u.pathname.endsWith('/realtime/rooms') && req.method() === 'POST') return json({ roomId: 'room1' });
     if (u.pathname.endsWith('/realtime/rooms/room1/invites')) return json({ id: 'sent1' });
+    if (u.pathname.endsWith('/launch-token')) return req.respond({ status: 401, body: '' }); // renewal refused
     return req.respond({ status: 204, body: '' });
   });
   const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const jwt = `${b64u({ alg: 'none' })}.${b64u({ sub: 'u-e2e-0001', game_scope: 'crown-draughts', exp: Math.floor(Date.now() / 1000) + 3600 })}.sig`;
-  await p.evaluateOnNewDocument(() => { globalThis.WebSocket = class { constructor() { this.readyState = 0; } send() {} close() {} }; });
+  await p.evaluateOnNewDocument(() => { globalThis.WebSocket = class { constructor(url) { this.url = url; this.readyState = 0; (globalThis.__sockets ||= []).push(this); } send() {} close() {} }; });
   await p.goto(`${base}/#game_token=${jwt}`, { waitUntil: 'networkidle2' });
   await p.waitForFunction(() => document.body.dataset.screen === 'title', { timeout: 15000 });
   await p.evaluate(() => [...document.querySelectorAll('.modal button, .consent-banner button')].find((b) => b.textContent === 'No thanks')?.click());
@@ -407,6 +408,31 @@ async function platformPass(viewport, tag) {
   });
   check(`[${tag}] host invites a friend to the table`, sent === 'Invited' && seen.includes('POST /api/v1/realtime/rooms/room1/invites'), String(sent));
   await p.screenshot({ path: `${SHOTS}/15-table-invite-${tag}.png` });
+  // The table socket drops (1006) and the token renewal is refused: the
+  // session-expired dialog offers "Back to StarHermit", and nothing reopens.
+  await p.evaluate(() => { const ws = globalThis.__sockets.at(-1); ws.readyState = 3; ws.onclose({ code: 1006 }); });
+  await p.waitForSelector('.modal-expired .btn-relaunch', { visible: true, timeout: 6000 }).catch(() => {});
+  const expired = await p.evaluate(() => {
+    const btn = document.querySelector('.modal-expired .btn-relaunch');
+    const box = document.querySelector('.modal-expired')?.getBoundingClientRect();
+    return {
+      btn: btn?.textContent,
+      fits: !!box && box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight,
+      sockets: globalThis.__sockets.length,
+    };
+  });
+  check(`[${tag}] expired session: "Back to StarHermit" dialog fits`, expired.btn === 'Back to StarHermit' && expired.fits && expired.sockets === 1, JSON.stringify(expired));
+  await p.screenshot({ path: `${SHOTS}/16-session-expired-${tag}.png` });
+  const relaunched = await p.evaluate(() => {
+    let n = 0; globalThis.StarHermit.relaunch = () => { n++; return true; };
+    document.querySelector('.modal-expired .btn-relaunch').click();
+    return n;
+  });
+  check(`[${tag}] "Back to StarHermit" calls StarHermit.relaunch`, relaunched === 1);
+  await p.evaluate(() => [...document.querySelectorAll('.modal-expired button')].find((b) => b.textContent === 'Keep playing here')?.click());
+  check(`[${tag}] keep playing leaves the table`, await p.evaluate(() => !document.querySelector('.modal-expired') && document.body.dataset.screen === 'title'));
+  // The refused renewal itself is expected to log one failed (401) request.
+  for (let i = errs.length - 1; i >= 0; i--) if (/401/.test(errs[i])) errs.splice(i, 1);
   check(`[${tag}] no console errors`, errs.length === 0, errs.slice(0, 5).join(' | '));
   await p.close();
 }
