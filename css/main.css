@@ -297,7 +297,7 @@ button { font-family: inherit; }
 /* DOM board */
 #dom-board-container {
   position: absolute; left: 50%; bottom: calc(12px + var(--sab)); transform: translateX(-50%);
-  display: none; z-index: 9;
+  display: none; z-index: 9; pointer-events: auto; /* #game-ui passes clicks through */
 }
 #dom-board-container.pinned { display: block; }
 .dom-board {
