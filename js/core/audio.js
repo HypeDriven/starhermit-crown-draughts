@@ -41,7 +41,7 @@ export class AudioEngine {
         const g = this.ctx.createGain();
         g.gain.value = gain;
         g.connect(this.master);
-        this.buses[name] = g;
+        this.buses[name] = (globalThis.GameOptions ? globalThis.GameOptions.tagBus(g, name) : g);
         return g;
       };
       this.master = this.ctx.createGain();
@@ -94,7 +94,7 @@ export class AudioEngine {
     if (buf === undefined) { this._loadSample(name); return false; }
     if (buf === null) return false;
     try {
-      const src = this.ctx.createBufferSource();
+      const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(this.ctx.createBufferSource(), bus) : this.ctx.createBufferSource());
       src.buffer = buf;
       src.connect(this.buses[bus] || this.buses.effects);
       src.start();
@@ -116,7 +116,7 @@ export class AudioEngine {
   _tone({ freq = 440, freqEnd = null, type = 'sine', dur = 0.12, gain = 0.2, bus = 'effects', attack = 0.004, detune = 0 }) {
     if (!this.ctx) return;
     const t0 = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
+    const osc = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(this.ctx.createOscillator(), bus) : this.ctx.createOscillator());
     osc.type = type;
     osc.frequency.setValueAtTime(freq, t0);
     if (freqEnd) osc.frequency.exponentialRampToValueAtTime(freqEnd, t0 + dur);
@@ -135,7 +135,7 @@ export class AudioEngine {
     const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = this.ctx.createBufferSource();
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(this.ctx.createBufferSource(), bus) : this.ctx.createBufferSource());
     src.buffer = buf;
     const f = this.ctx.createBiquadFilter();
     f.type = type;
@@ -255,7 +255,7 @@ export class AudioEngine {
       v = v * 0.98 + (Math.random() * 2 - 1) * 0.02; // brown-ish
       d[i] = v * 3;
     }
-    const src = this.ctx.createBufferSource();
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(this.ctx.createBufferSource(), null) : this.ctx.createBufferSource());
     src.buffer = buf;
     src.loop = true;
     const f = this.ctx.createBiquadFilter();
@@ -286,7 +286,7 @@ export class AudioEngine {
       const buf2 = this.ctx.createBuffer(1, len2, this.ctx.sampleRate);
       const d2 = buf2.getChannelData(0);
       for (let i = 0; i < len2; i++) d2[i] = Math.random() * 2 - 1;
-      const src2 = this.ctx.createBufferSource();
+      const src2 = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(this.ctx.createBufferSource(), null) : this.ctx.createBufferSource());
       src2.buffer = buf2;
       src2.loop = true;
       const f2 = this.ctx.createBiquadFilter();
@@ -323,7 +323,7 @@ export class AudioEngine {
       }
       if (buf === null) return; // no clip: keep the synthesized bed
       try {
-        const src = this.ctx.createBufferSource();
+        const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(this.ctx.createBufferSource(), null) : this.ctx.createBufferSource());
         src.buffer = buf;
         src.loop = true;
         const g = this.ctx.createGain();
@@ -366,7 +366,7 @@ export class AudioEngine {
       for (const semi of chord) {
         const freq = m.root * Math.pow(2, semi / 12);
         for (const det of [-4, 3]) {
-          const osc = this.ctx.createOscillator();
+          const osc = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(this.ctx.createOscillator(), null) : this.ctx.createOscillator());
           osc.type = 'sine';
           osc.frequency.value = freq * (this._intensity > 0.5 && det > 0 ? 2 : 1);
           osc.detune.value = det;

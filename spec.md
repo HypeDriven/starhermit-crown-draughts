@@ -348,3 +348,8 @@ QA bar (checkable): every mode reachable from the visible UI on desktop and phon
 ## Directional navigation
 
 Keyboard arrows, WASD and gamepad directions move the cursor in the corresponding visible direction on the pinned HTML board. Up selects a smaller row index and Down a larger one, independently of the 3D camera preset. A held gamepad direction advances one playable cell per press, and reaching an edge retains the last playable cell and keyboard focus.
+
+
+## Sound and frame-rate options
+
+The options panel includes Sound controls for master, music, effects and UI volume, a mute that preserves volume levels, and an Auto or manual concurrent-sound limit (1–64). Changes apply immediately with perceptual volume curves. A shared allocator bounds Web Audio and media playback, including loops and scheduled sources. Graphics includes Auto display refresh or a custom maximum frame rate from 1–1000 FPS; rendering is paced independently of simulation and input. Preferences persist locally, with FPS stored per detected GPU, and reconcile with Starhermit settings when signed in. The controls support keyboard and touch input and the supported English, Spanish, German, French, Portuguese and Italian locales.

@@ -554,16 +554,16 @@ export class RenderFacade {
       }
       if (this.composer) {
         try {
-          this.composer.render(dt);
+          (globalThis.GameOptions ? globalThis.GameOptions.draw(this.composer.renderer, () => this.composer.render(dt)) : this.composer.render(dt));
         } catch {
           this.postFailed = true;
           this.composer = null;
           this._applyFog();
           this.renderer.setRenderTarget(null);
-          this.renderer.render(this.scene, this.camera);
+          (globalThis.GameOptions ? globalThis.GameOptions.draw(this.renderer, () => this.renderer.render(this.scene, this.camera)) : this.renderer.render(this.scene, this.camera));
         }
       } else {
-        this.renderer.render(this.scene, this.camera);
+        (globalThis.GameOptions ? globalThis.GameOptions.draw(this.renderer, () => this.renderer.render(this.scene, this.camera)) : this.renderer.render(this.scene, this.camera));
       }
     };
     this._raf = requestAnimationFrame(loop);
