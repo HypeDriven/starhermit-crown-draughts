@@ -358,7 +358,8 @@ check('mobile: Graphics panel fits the viewport', fits);
 async function platformPass(viewport, tag) {
   const p = await browser.newPage();
   await p.setViewport(viewport);
-  const errs = [], seen = [];
+  const errs = [], seen = [], bodies = {};
+  let prefLang = 'en';
   p.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warn') errs.push(`${m.type()}: ${m.text()}`); });
   p.on('pageerror', (e) => errs.push(String(e)));
   await p.setRequestInterception(true);
@@ -366,8 +367,12 @@ async function platformPass(viewport, tag) {
     const u = new URL(req.url());
     if (!PLATFORM_API.test(u.pathname) && u.pathname !== '/api/v1/time') return req.continue();
     seen.push(req.method() + ' ' + u.pathname);
-    const json = (o) => req.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(o) });
+    if (req.method() !== 'GET') bodies[req.method() + ' ' + u.pathname] = req.postData();
+    const json = (o, status = 200) => req.respond({ status, contentType: 'application/json', body: JSON.stringify(o) });
     if (u.pathname === '/api/v1/time') return json({ now: Date.now() });
+    if (u.pathname === '/api/v1/me/language') return json({ preferredLanguage: prefLang });
+    if (/\/settings\/ui\.language$/.test(u.pathname) && req.method() === 'PUT') return json({ key: 'ui.language' });
+    if (u.pathname.endsWith('/reports') && req.method() === 'POST') return json({ id: 'r1', kind: 'bug', status: 'open', createdAt: new Date().toISOString() }, 201);
     if (u.pathname.endsWith('/profile')) return json({ nickname: u.pathname.includes('u-friend') ? 'Rook Friend' : 'Pip Tester' });
     if (u.pathname.endsWith('/settings') && req.method() === 'GET') return json({ settings: { accessibility: { highContrast: true } } });
     if (u.pathname.endsWith('/controls')) return json({ actions: [{ action: 'pause', codes: ['KeyO'] }] });
@@ -433,6 +438,80 @@ async function platformPass(viewport, tag) {
   check(`[${tag}] keep playing leaves the table`, await p.evaluate(() => !document.querySelector('.modal-expired') && document.body.dataset.screen === 'title'));
   // The refused renewal itself is expected to log one failed (401) request.
   for (let i = errs.length - 1; i >= 0; i--) if (/401/.test(errs[i])) errs.splice(i, 1);
+
+  // Language: Automatic follows the StarHermit preferred language (fr-CA);
+  // choosing another language in Settings re-renders the menus, the open
+  // dialog and a running round in place, and saves ui.language; Report a
+  // problem posts a bug report.
+  prefLang = 'fr-CA';
+  await p.goto('about:blank');
+  await p.goto(`${base}/#game_token=${jwt}`, { waitUntil: 'networkidle2' });
+  await p.waitForFunction(() => document.documentElement.lang === 'fr-CA' && document.body.dataset.screen === 'title', { timeout: 15000 });
+  const clickText = async (selector, text) => {
+    const handles = await p.$$(selector);
+    for (const h of handles) if ((await h.evaluate((n) => n.textContent.trim())) === text) { await h.click(); return true; }
+    throw new Error(`no ${selector} with text "${text}"`);
+  };
+  check(`[${tag}] language: Automatic resolves the account's fr-CA`, await p.evaluate(() => [...document.querySelectorAll('.title-actions button')].some((b) => b.textContent === 'Jouer')));
+  await clickText('.title-footer button', 'Paramètres');
+  await p.click('#settings-tab-graphics');
+  await p.waitForSelector('[data-game-language="choice"]', { visible: true, timeout: 5000 });
+  const autoLabel = await p.$eval('[data-game-language="choice"] option', (o) => o.textContent);
+  check(`[${tag}] language: Automatic option names the resolved language`, autoLabel === 'Automatique — Français (Canada)', autoLabel);
+  await p.select('[data-game-language="choice"]', 'de-DE');
+  await p.waitForFunction(() => document.documentElement.lang === 'de-DE', { timeout: 5000 });
+  await p.waitForFunction(() => /Im Konto gespeichert/.test(document.querySelector('[data-game-language="status"]')?.textContent || ''), { timeout: 5000 }).catch(() => {});
+  const de = await p.evaluate(() => ({
+    title: document.querySelector('.modal h2')?.textContent,
+    tab: document.getElementById('settings-tab-graphics')?.textContent,
+    gfx: document.querySelector('.gfx-heading')?.textContent,
+    select: !!document.querySelector('[data-game-language="choice"]'),
+    status: document.querySelector('[data-game-language="status"]')?.textContent,
+    menu: [...document.querySelectorAll('.title-actions button')].map((b) => b.textContent).includes('Spielen'),
+  }));
+  check(`[${tag}] language: switching to Deutsch re-renders the dialog and the menu`, de.title === 'Einstellungen' && de.tab === 'Grafik' && de.gfx === 'Grafikqualität' && de.select && de.menu, JSON.stringify(de));
+  const saved = bodies['PUT /api/v1/games/crown-draughts/settings/ui.language'];
+  check(`[${tag}] language: the choice is saved to ui.language`, !!saved && JSON.parse(saved).value?.choice === 'de-DE' && /Im Konto gespeichert/.test(de.status), String(saved));
+  await p.waitForSelector('[data-game-report="title"]', { visible: true });
+  await p.type('[data-game-report="title"]', 'Language test report');
+  await p.click('[data-game-report="send"]');
+  await p.waitForFunction(() => /Danke/.test(document.querySelector('[data-game-report="status"]')?.textContent || ''), { timeout: 5000 }).catch(() => {});
+  const report = bodies['POST /api/v1/games/crown-draughts/reports'];
+  check(`[${tag}] report a problem posts a bug report`, !!report && JSON.parse(report).kind === 'bug', String(report).slice(0, 120));
+  await p.$eval('[data-game-report="title"]', (n) => n.scrollIntoView({ block: 'center' }));
+  await p.screenshot({ path: `${SHOTS}/17-language-de-${tag}.png` });
+  const fitsDe = await p.evaluate(() => {
+    const m = document.querySelector('.modal').getBoundingClientRect();
+    return m.left >= 0 && m.right <= innerWidth + 0.5 && document.documentElement.scrollWidth <= innerWidth;
+  });
+  check(`[${tag}] language: German settings fit the viewport`, fitsDe);
+  await p.keyboard.press('Escape');
+  // Mid-round: Pause → Einstellungen → Italiano re-renders the HUD without restarting.
+  await clickText('.title-actions button', 'Spielen');
+  await p.waitForFunction(() => document.body.dataset.screen === 'modes');
+  await p.evaluate(() => [...document.querySelectorAll('.mode-card')].find((c) => c.querySelector('h3')?.textContent === 'Übung')?.scrollIntoView());
+  const cards = await p.$$('.mode-card');
+  for (const c of cards) if ((await c.evaluate((n) => n.querySelector('h3').textContent)) === 'Übung') { await c.click(); break; }
+  await p.waitForFunction(() => document.body.dataset.screen === 'practice');
+  await clickText('.setup-actions button', 'Platz nehmen');
+  await p.waitForFunction(() => document.body.dataset.screen === 'game' && !document.querySelector('.countdown-overlay'), { timeout: 10000 });
+  const plyBefore = await p.evaluate(() => globalThis.__crownDraughts.session.state.ply);
+  await p.$eval('.pause-btn', (b) => b.scrollIntoView());
+  await (await p.$('.pause-btn')).evaluate((b) => b.click());
+  await p.waitForSelector('.pause-actions', { visible: true });
+  await clickText('.pause-actions button', 'Einstellungen');
+  await p.click('#settings-tab-graphics');
+  await p.waitForSelector('[data-game-language="choice"]', { visible: true });
+  await p.select('[data-game-language="choice"]', 'it-IT');
+  await p.waitForFunction(() => document.documentElement.lang === 'it-IT');
+  const it = await p.evaluate(() => ({
+    objective: document.getElementById('objective-title')?.textContent,
+    pause: [...document.querySelectorAll('.pause-actions button')].map((b) => b.textContent),
+    session: globalThis.__crownDraughts.session.state.ply,
+  }));
+  check(`[${tag}] language: mid-round switch re-renders the HUD and pause menu, round kept`, it.objective === 'Allenamento' && it.pause.includes('Riprendi') && it.session === plyBefore, JSON.stringify(it));
+  await p.select('[data-game-language="choice"]', 'auto');
+  await p.waitForFunction(() => document.documentElement.lang === 'fr-CA');
   check(`[${tag}] no console errors`, errs.length === 0, errs.slice(0, 5).join(' | '));
   await p.close();
 }

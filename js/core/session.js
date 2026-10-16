@@ -6,7 +6,7 @@
 import {
   createGame, apply, serialize, deserialize, hashState, legalActions,
   validateAction, scoreBreakdown, describeAction, terminalReasonText,
-  ENGINE_VERSION, INVALID_REASON_TEXT,
+  ENGINE_VERSION, INVALID_REASON_TEXT, translateText as tr,
 } from '../rules/engine.js';
 import { chooseAction, hintAction, AI_LEVELS, evaluate } from '../rules/ai.js';
 import { createRng } from '../rules/rng.js';
@@ -189,10 +189,10 @@ export class Session extends Emitter {
     // large positive score means the responder is the one who is behind.
     const score = -evaluate(this.state);
     if (score <= -400) {
-      this.emit('announce', { text: `${responder.name} accepts the draw.` });
+      this.emit('announce', { text: tr('{name} accepts the draw.', { name: tr(responder.name) }) });
       this.submit({ type: 'acceptDraw', player: responder.id }, responder.id);
     } else {
-      this.emit('announce', { text: `${responder.name} declines the draw.` });
+      this.emit('announce', { text: tr('{name} declines the draw.', { name: tr(responder.name) }) });
       this.submit({ type: 'declineDraw', player: responder.id }, responder.id);
     }
   }
@@ -225,7 +225,7 @@ export class Session extends Emitter {
     if (steps) {
       this.assists.undos += 1;
       this.emit('state', this.state);
-      this.emit('announce', { text: 'Undone.' });
+      this.emit('announce', { text: tr('Undone.') });
       this._saveSnapshot();
     }
     return { ok: true, steps };
@@ -261,7 +261,7 @@ export class Session extends Emitter {
       this.clock[cur] = Math.max(0, this.clock[cur] - dt);
       this.emit('clock', this.clock);
       if (this.clock[cur] <= 0) {
-        this.emit('announce', { text: `${this.state.players[cur].name}'s time has run out.` });
+        this.emit('announce', { text: tr("{name}'s time has run out.", { name: tr(this.state.players[cur].name) }) });
         this.submit({ type: 'timeout', player: cur }, cur);
       }
     }, 200);

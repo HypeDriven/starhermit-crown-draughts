@@ -15,14 +15,23 @@ test.afterEach(() => { globalThis.StarHermit?.signOut(); });
 
 async function boot(hash, { renew } = {}) {
   const calls = [];
-  const store = { save: null, settings: {} };
+  const store = { save: null, settings: {}, version: 0, etag: null };
   globalThis.fetch = async (url, init = {}) => {
     const method = init.method || 'GET';
     calls.push({ url, method, init });
     const json = (o) => new Response(JSON.stringify(o), { status: 200, headers: { 'Content-Type': 'application/json' } });
     if (url.endsWith('/api/v1/users/u-12345678/profile')) return json({ nickname: 'Pip' });
     if (url.includes('/api/v1/me/cloud-saves/')) {
-      if (method === 'PUT') { store.save = Buffer.from(JSON.parse(init.body).dataBase64, 'base64'); return new Response(null, { status: 204 }); }
+      // Conditional writes: the SDK sends If-Match with the ETag it last saw;
+      // a newer save from "another device" (store.etag bumped) answers 412.
+      if (url.endsWith('/info')) return json({ exists: !!store.save, etag: store.etag || null });
+      if (method === 'PUT') {
+        const ifMatch = init.headers?.['If-Match'];
+        if (ifMatch && ifMatch !== store.etag) return new Response(JSON.stringify({ error: 'precondition_failed', etag: store.etag }), { status: 412, headers: { 'Content-Type': 'application/json' } });
+        store.save = Buffer.from(JSON.parse(init.body).dataBase64, 'base64');
+        store.etag = '"v' + (++store.version) + '"';
+        return json({ etag: store.etag });
+      }
       return store.save ? new Response(store.save, { status: 200 }) : new Response('', { status: 404 });
     }
     if (url.endsWith(`/api/v1/games/${SLUG}/settings`)) {
@@ -91,7 +100,8 @@ test('settings patch, controls and invite link', async () => {
   assert.equal(calls.filter((c) => c.method === 'PATCH').length, 1, 'patches are debounced into one');
   assert.deepEqual(await P.loadBindings({ hint: ['KeyH'], pause: ['KeyP'] }), { hint: ['F2'], pause: ['KeyP'] });
   assert.equal(await P.setControl('pause', ['KeyO']), true);
-  assert.deepEqual(store.controls, { pause: ['KeyO'] });
+  // The SDK re-reads the stored bindings and writes the full set back.
+  assert.deepEqual(store.controls, { hint: ['F2'], pause: ['KeyO'] });
   assert.match(P.inviteLink(), /game-invite\/u-12345678\/crown-draughts$/);
 });
 
@@ -141,6 +151,7 @@ async function bootSockets(renewals) {
       const r = renewals[renewCalls.length] || 'ok';
       renewCalls.push(r);
       if (r === 'ok') return new Response(JSON.stringify({ token: JWT2 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (r === 'terms') return new Response(JSON.stringify({ error: 'terms_acceptance_required' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
       return new Response('', { status: r === 'refused' ? 401 : 503 });
     },
   });
@@ -207,10 +218,96 @@ test("reconnect on 'relaunch' stops and surfaces the session-expired UI", async 
   assert.equal(renewCalls.length, 1);
 });
 
-test('session-expired strings exist in every locale', async () => {
+test("reconnect on 'terms-required' stops like auth loss and asks for StarHermit", async (t) => {
+  const { P, sockets, renewCalls } = await bootSockets(['terms']);
+  const { HostedSessionClient } = await import('../js/core/hosted.js');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const client = new HostedSessionClient(P, { roomId: 'r1', seat: 0 });
+  let terms = 0, authLost = 0;
+  client.on('termsRequired', () => terms++);
+  client.on('authLost', () => authLost++);
+  client.connect();
+  drop(sockets[0]);
+  t.mock.timers.tick(1000);
+  await settle();
+  assert.deepEqual(renewCalls, ['terms']);
+  assert.equal(terms, 1, 'the app shows the terms dialog with "Back to StarHermit"');
+  assert.equal(authLost, 0);
+  t.mock.timers.tick(60000);
+  await settle();
+  assert.equal(sockets.length, 1, 'the reconnect loop has ended');
+});
+
+test('a room that is gone (4404) ends the reconnect loop with a visible notice', async (t) => {
+  const { P, sockets, renewCalls } = await bootSockets([]);
+  const { HostedSessionClient } = await import('../js/core/hosted.js');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const client = new HostedSessionClient(P, { roomId: 'r1', seat: 0 });
+  const codes = [];
+  client.on('unavailable', (code) => codes.push(code));
+  client.connect();
+  sockets[0].readyState = 3; sockets[0].onclose({ code: 4404 });
+  t.mock.timers.tick(60000);
+  await settle();
+  assert.deepEqual(codes, [4404]);
+  assert.equal(sockets.length, 1);
+  assert.equal(renewCalls.length, 0);
+});
+
+test('a lost cloud write (412) is reported as a save conflict', async () => {
+  const { P, store } = await boot('#game_token=' + JWT);
+  await P.init();
+  let conflicts = 0;
+  P.onSaveConflict(() => conflicts++);
+  assert.equal(await P.loadCloudSave(), null);
+  P.writeCloudSave(JSON.stringify({ v: 1, id: 'a', payload: {} }));
+  assert.equal(await P.flushCloudSave(true), true);
+  store.etag = '"elsewhere"'; // another device saved since
+  P.writeCloudSave(JSON.stringify({ v: 1, id: 'b', payload: {} }));
+  assert.equal(await P.flushCloudSave(true), false);
+  assert.equal(conflicts, 1);
+  assert.equal(P.saveConflicted(), true);
+  await P.loadCloudSave();
+  assert.equal(P.saveConflicted(), false, 'reloading lifts the block');
+});
+
+test('mergeProgress keeps the better side of every record', async () => {
+  const { mergeProgress } = await import('../js/core/progress.js');
+  const remote = {
+    journey: { 'ch1-s1': { completed: true, stars: 2, bestPlies: 40, plays: 3 } },
+    lessonsComplete: ['first-steps'], achievements: ['first_completion'], masteryClaimed: [5],
+    challenges: { thin: { completed: true, bestScore: 900 } },
+    daily: { '2026-10-10': { completed: true, won: true, score: 700, excluded: false } },
+    stats: { roundsCompleted: 9, wins: 4, dailyStreak: 3, bestDailyStreak: 3, lastDailyDate: '2026-10-10', bestChain: 2 },
+  };
+  const local = {
+    journey: { 'ch1-s1': { completed: false, stars: 0, bestPlies: null, plays: 5 }, 'ch1-s2': { completed: true, stars: 1, bestPlies: 20, plays: 1 } },
+    lessonsComplete: ['taking'], achievements: ['first_crown'], masteryClaimed: [],
+    challenges: { thin: { completed: false, bestScore: 0 }, blitz: { completed: true, bestScore: 300 } },
+    daily: { '2026-10-09': { completed: true, won: false, score: 100, excluded: false } },
+    stats: { roundsCompleted: 12, wins: 3, dailyStreak: 0, bestDailyStreak: 5, lastDailyDate: '2026-10-09', bestChain: 4 },
+  };
+  const m = mergeProgress(remote, local);
+  assert.deepEqual(m.journey['ch1-s1'], { completed: true, stars: 2, bestPlies: 40, plays: 5 });
+  assert.equal(m.journey['ch1-s2'].completed, true);
+  assert.deepEqual(m.lessonsComplete.sort(), ['first-steps', 'taking']);
+  assert.deepEqual(m.achievements.sort(), ['first_completion', 'first_crown']);
+  assert.deepEqual(m.masteryClaimed, [5]);
+  assert.deepEqual(m.challenges.thin, { completed: true, bestScore: 900 });
+  assert.equal(m.challenges.blitz.bestScore, 300);
+  assert.deepEqual(Object.keys(m.daily).sort(), ['2026-10-09', '2026-10-10']);
+  assert.equal(m.stats.roundsCompleted, 12);
+  assert.equal(m.stats.wins, 4);
+  assert.equal(m.stats.bestChain, 4);
+  assert.equal(m.stats.lastDailyDate, '2026-10-10');
+  assert.equal(m.stats.dailyStreak, 3, 'streak follows the later daily');
+  assert.equal(m.stats.bestDailyStreak, 5);
+});
+
+test('session-expired and terms strings exist in every locale', async () => {
   const { PLATFORM_STRINGS } = await import('../js/ui/platform-i18n.js');
   for (const [loc, T] of Object.entries(PLATFORM_STRINGS)) {
-    for (const k of ['expiredTitle', 'expiredBody', 'relaunch', 'keepPlaying', 'relaunchFailed']) assert.ok(T[k], `${loc}.${k}`);
+    for (const k of ['expiredTitle', 'expiredBody', 'termsTitle', 'termsBody', 'relaunch', 'keepPlaying', 'relaunchFailed']) assert.ok(T[k], `${loc}.${k}`);
   }
 });
 

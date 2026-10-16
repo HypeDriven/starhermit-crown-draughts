@@ -1,6 +1,7 @@
 // Small DOM helpers shared across screens.
 
 import { audio } from '../core/audio.js';
+import { T } from '../i18n/index.js';
 
 export function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
@@ -53,6 +54,9 @@ export class Modal {
     document.addEventListener('keydown', this._keyHandler, true);
   }
 
+  /** Update the dialog's accessible name (language change). */
+  setTitle(title) { this.box.setAttribute('aria-label', title); }
+
   close() {
     if (!this.backdrop.isConnected) return;
     document.removeEventListener('keydown', this._keyHandler, true);
@@ -63,13 +67,13 @@ export class Modal {
   }
 }
 
-export function confirmDialog(root, { title, body, confirmLabel = 'Confirm', danger = false }) {
+export function confirmDialog(root, { title, body, confirmLabel = T('Confirm'), danger = false }) {
   return new Promise((resolve) => {
     const modal = new Modal(root, { title, onClose: () => resolve(false) });
     modal.box.appendChild(el('h2', { text: title }));
     if (body) modal.box.appendChild(el('p', { text: body, class: 'modal-body' }));
     const row = el('div', { class: 'modal-actions' });
-    row.appendChild(button('Cancel', () => { audio.uiBack(); modal.close(); resolve(false); }));
+    row.appendChild(button(T('Cancel'), () => { audio.uiBack(); modal.close(); resolve(false); }));
     // resolve before close(): close() fires onClose, which resolves false.
     row.appendChild(button(confirmLabel, () => { audio.uiConfirm(); resolve(true); modal.close(); }, { kind: danger ? 'danger' : 'primary' }));
     modal.box.appendChild(row);

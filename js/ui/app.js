@@ -22,6 +22,9 @@ import { playerStats, RULESETS } from '../rules/engine.js';
 import { DomBoard } from './boarddom.js';
 import { InputManager, DEFAULT_KEYBOARD } from './input.js';
 import { platformStrings, pfmt } from './platform-i18n.js';
+import { T, onLanguage, initLanguage } from '../i18n/index.js';
+import { setTextTranslator, describeAction } from '../rules/engine.js';
+import { mergeProgress } from '../core/progress.js';
 import { GameController } from './gameview.js';
 import { el, button, Modal, confirmDialog } from './widgets.js';
 import * as screens from './screens.js';
@@ -44,9 +47,24 @@ export class App {
     this.dailyDef = null;
     this._screen = 'boot';
     this._modals = [];
+    this._forms = {};
+    this._screenData = null;
+    this._openModals = new Set();
+    this._log = [];
+    this._coach = null;
+  }
+
+  /** Per-screen form state, kept across language re-renders and reset on navigation. */
+  formState(screen, init) {
+    if (!this._forms[screen]) this._forms[screen] = init();
+    return this._forms[screen];
   }
 
   async boot() {
+    // Engine/session announcements and move descriptions follow the game language.
+    setTextTranslator(T);
+    this.language = initLanguage();
+    onLanguage(() => this._onLanguage());
     this._grabDom();
     this._buildDomBoard();
     this.input = new InputManager({ onAction: (a, meta) => this._onInputAction(a, meta) });
@@ -70,6 +88,7 @@ export class App {
       if (this._screen === 'title') this.go('title');
       this._syncFromPlatform();
     });
+    this.platform.onSaveConflict(() => this._mergeCloudConflict());
     this._syncFromPlatform();
     this._wireLifecycle();
     this._applyTextSize();
@@ -109,9 +128,10 @@ export class App {
   // Navigation / state machine
   // ------------------------------------------------------------------
 
-  go(screen, data) {
+  go(screen, data, { refresh = false } = {}) {
     const prev = this._screen;
     this._screen = screen;
+    if (!refresh) { this._forms = {}; this._screenData = data; }
     for (const sec of this.$screens.querySelectorAll('.screen')) {
       sec.hidden = sec.dataset.screen !== screen;
     }
@@ -136,12 +156,13 @@ export class App {
         results: () => { /* built by showResults */ },
       }[screen];
       builder?.();
+      if (refresh) return;
       // focus the screen heading for screen readers & keyboard flow
       requestAnimationFrame(() => {
         const h = active.querySelector('h1, h2, [autofocus]');
         if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); }
       });
-      this.announce(`${active.querySelector('h1, h2')?.textContent || screen} screen`);
+      this.announce(T('{name} screen', { name: active.querySelector('h1, h2')?.textContent || screen }));
     }
     if (inGame) {
       requestAnimationFrame(() => this.domBoard.focusCursor());
@@ -149,6 +170,38 @@ export class App {
   }
 
   _showScreenless(name) { /* helper for dynamic-only screens */ }
+
+  /**
+   * The game language changed (Settings → Language, or Automatic resolving
+   * the account preference): re-render every visible screen, the in-game HUD,
+   * open dialogs and live labels in place. Sessions, sockets, selections and
+   * form choices are untouched.
+   */
+  _onLanguage() {
+    if (!this.$screens) return;
+    const screen = this._screen;
+    if (screen === 'results' && this._lastResults) {
+      const r = this._lastResults;
+      screens.buildResults(this, this.$screens.querySelector('[data-screen="results"]'), r);
+      this._postHighScoreLine(this.$screens.querySelector('[data-screen="results"]'), r);
+    } else if (screen !== 'game' && screen !== 'boot') {
+      this.go(screen, this._screenData, { refresh: true });
+    }
+    if (this.session && this.game && screen === 'game') this._refreshGameHud();
+    for (const modal of [...this._openModals]) {
+      if (!modal.backdrop.isConnected) { this._openModals.delete(modal); continue; }
+      modal.relabel?.();
+    }
+    this._consentRelabel?.();
+    this.domBoard?.render();
+  }
+
+  /** Track a modal so a language change can relabel it. */
+  _trackModal(modal, relabel) {
+    if (relabel) modal.relabel = relabel;
+    this._openModals.add(modal);
+    return modal;
+  }
 
   // ------------------------------------------------------------------
   // Game lifecycle
@@ -205,7 +258,7 @@ export class App {
     session.pause('countdown');
     const overlay = el('div', { class: 'countdown-overlay', role: 'status' });
     document.getElementById('app').appendChild(overlay);
-    const steps = clocked ? ['3', '2', '1', 'Go!'] : ['Ready?'];
+    const steps = clocked ? ['3', '2', '1', T('Go!')] : [T('Ready?')];
     let i = 0;
     const reduced = this.settings.accessibility.reducedMotion;
     const stepMs = clocked ? (reduced ? 500 : 750) : (reduced ? 500 : 900);
@@ -271,7 +324,7 @@ export class App {
   startChallenge(c) {
     if (c.constraints?.localMultiplayer) {
       // melee challenge: local 2–4 commanders
-      this.startLocal({ ruleset: 'melee', names: ['Ivory', 'Jade', 'Onyx', 'Ember'], count: 4, challengeId: c.id });
+      this.startLocal({ ruleset: 'melee', names: [T('Ivory'), T('Jade'), T('Onyx'), T('Ember')], count: 4, challengeId: c.id });
       return;
     }
     const setup = contentSetup(c);
@@ -360,7 +413,7 @@ export class App {
       this.progress.lessonsComplete.push(lesson.id);
       this._afterProgressChange();
     }
-    this.ui.toast(`Lesson complete: ${lesson.title}`, 'ok', 4000);
+    this.ui.toast(T('Lesson complete: {title}', { title: T(lesson.title) }), 'ok', 4000);
     this.platform.track('tutorial_step', { mode: 'lesson', reason: 'complete' });
     this.exitToTitle('learn');
   }
@@ -373,7 +426,7 @@ export class App {
       clockMs: null,
       turnDeadlineMs: state.clock ? 90000 : null,
     });
-    if (!res.ok) return this.ui.toast(res.error || 'Could not create table', 'warn');
+    if (!res.ok) return this.ui.toast(T('Could not create table'), 'warn');
     this.hostedClient = res.client;
     this.hostedClient.connect();
     this._wireHostedOver();
@@ -390,8 +443,8 @@ export class App {
     const res = await HostedSessionClient.join(this.platform, { name: this.profile.name });
     if (!res.ok) {
       return this.ui.toast(res.error === 'no-open-tables'
-        ? 'No open tables right now — host one, or accept a friend invite.'
-        : (res.error || 'Could not join'), 'warn');
+        ? T('No open tables right now — host one, or accept a friend invite.')
+        : T('Could not join'), 'warn');
     }
     this.hostedClient = res.client;
     this.hostedClient.connect();
@@ -411,22 +464,30 @@ export class App {
   async joinByCode() {
     // Join codes belonged to the old dev-server protocol. On the platform,
     // private tables are friend invites; open tables use quick-join.
-    return this.ui.toast('Private tables arrive as friend invites — open tables fill from Hosted play.', 'warn');
+    return this.ui.toast(T('Private tables arrive as friend invites — open tables fill from Hosted play.'), 'warn');
   }
 
   _wireHostedOver() {
     this.hostedClient.on('over', (over) => this._onGameOver(over));
     this.hostedClient.on('authLost', () => this.showSessionExpired());
+    // Pending terms consent stops the table socket like auth loss: only the
+    // StarHermit launcher can collect it, so the same dialog offers the way back.
+    this.hostedClient.on('termsRequired', () => this.showSessionExpired({ terms: true }));
+    // The room is gone (closed or no longer ours): the reconnect loop has
+    // ended; say so instead of retrying forever.
+    this.hostedClient.on('unavailable', () => {
+      this.ui.toast(T('This table is no longer available — host a new one or join another.'), 'warn', 6000);
+      if (this._screen === 'table-room') this.leaveHosted();
+    });
   }
 
-  /** The launch token can no longer be renewed: say so and offer the way back
-   *  to StarHermit (relaunch must run from the click). Closing it leaves any
-   *  hosted table and keeps playing on this device. */
-  showSessionExpired() {
+  /** The launch token can no longer be renewed (or terms consent is pending):
+   *  say so and offer the way back to StarHermit (relaunch must run from the
+   *  click). Closing it leaves any hosted table and keeps playing on this device. */
+  showSessionExpired({ terms = false } = {}) {
     if (this._expiredModal?.backdrop.isConnected) return;
-    const T = platformStrings();
     const modal = new Modal(this.$overlay, {
-      title: T.expiredTitle,
+      title: '',
       onClose: () => {
         this._expiredModal = null;
         if (this.hostedClient) this.exitToTitle();
@@ -434,16 +495,25 @@ export class App {
     });
     this._expiredModal = modal;
     modal.box.classList.add('modal-expired');
-    modal.box.appendChild(el('h2', { text: T.expiredTitle }));
-    modal.box.appendChild(el('p', { text: T.expiredBody, class: 'modal-body' }));
-    const row = el('div', { class: 'modal-actions' });
-    row.appendChild(button(T.keepPlaying, () => { audio.uiBack(); modal.close(); }));
-    row.appendChild(button(T.relaunch, () => {
-      audio.uiConfirm();
-      if (!this.platform.relaunch()) this.ui.toast(T.relaunchFailed, 'warn', 5000);
-    }, { kind: 'primary', class: 'btn btn-primary btn-relaunch' }));
-    modal.box.appendChild(row);
-    row.querySelector('.btn-relaunch')?.focus();
+    const render = () => {
+      const PT = platformStrings();
+      const title = terms ? PT.termsTitle : PT.expiredTitle;
+      modal.setTitle(title);
+      const row = el('div', { class: 'modal-actions' });
+      row.appendChild(button(PT.keepPlaying, () => { audio.uiBack(); modal.close(); }));
+      row.appendChild(button(PT.relaunch, () => {
+        audio.uiConfirm();
+        if (!this.platform.relaunch()) this.ui.toast(platformStrings().relaunchFailed, 'warn', 5000);
+      }, { kind: 'primary', class: 'btn btn-primary btn-relaunch' }));
+      modal.box.replaceChildren(
+        el('h2', { text: title }),
+        el('p', { text: terms ? PT.termsBody : PT.expiredBody, class: 'modal-body' }),
+        row,
+      );
+    };
+    render();
+    this._trackModal(modal, render);
+    modal.box.querySelector('.btn-relaunch')?.focus();
   }
 
   _enterHostedGame() {
@@ -460,7 +530,7 @@ export class App {
     this.go('game');
     this.game.begin();
     this.audio.roundStart();
-    this.ui.toast('Round started. Good luck!', 'ok');
+    this.ui.toast(T('Round started. Good luck!'), 'ok');
     this.platform.startPresence('playing');
   }
 
@@ -508,10 +578,10 @@ export class App {
     if (config.mode === 'journey' && iWon) {
       const nextStage = this._nextJourneyStage(config.contentId);
       if (nextStage) {
-        outcome.nextAction = { label: `Next: ${nextStage.name}`, fn: () => this.startJourneyStage(nextStage) };
+        outcome.nextAction = { label: () => T('Next: {name}', { name: T(nextStage.name) }), fn: () => this.startJourneyStage(nextStage) };
       }
     } else if (config.mode === 'daily') {
-      outcome.nextAction = { label: 'Back to the garden', fn: () => this.exitToTitle() };
+      outcome.nextAction = { label: () => T('Back to the garden'), fn: () => this.exitToTitle() };
     }
     setTimeout(() => this.showResults(over, config, outcome), 1100);
   }
@@ -524,6 +594,7 @@ export class App {
 
   showResults(over, config, outcome) {
     const active = this.$screens.querySelector('[data-screen="results"]');
+    this._lastResults = { over, config, outcome };
     screens.buildResults(this, active, { over, config, outcome });
     this._postHighScore(active, over, config, outcome);
     this.go('results');
@@ -532,7 +603,7 @@ export class App {
     if (outcome.unlocked?.length) this.audio.achievement();
     if (outcome.mastery?.length) this.audio.masteryUnlock();
     if (config.mode === 'daily' && outcome.iWon && this.progress.stats.dailyStreak >= 3) this.audio.streak();
-    this.announce(`${over.winner === null ? 'Draw' : outcome.iWon ? 'Victory' : 'Round over'}. ${over.reasonText}`, true);
+    this.announce(`${over.winner === null ? T('Draw') : outcome.iWon ? T('Victory') : T('Round over')}. ${T(over.reasonText)}`, true);
   }
 
   // Signed in, a finished solo round against the AI (not a lesson, Pass & Play
@@ -544,12 +615,25 @@ export class App {
     const solo = config.mode !== 'hosted' && config.mode !== 'lesson' && !outcome.localMultiplayer;
     const brk = over.breakdowns && over.breakdowns[outcome.mySeat];
     if (!this.platform.hosted || !solo || !brk) { line.hidden = true; return; }
-    const T = platformStrings();
     line.hidden = false;
-    line.textContent = T.lbPosting;
+    this._lbResult = null;
+    this._postHighScoreLine(root);
     this.platform.postHighScore(Math.max(0, Math.round(brk.total))).then((r) => {
-      line.textContent = !r.posted ? T.lbNotPosted : r.rank ? pfmt(T.lbRank, { rank: r.rank }) : T.lbPosted;
+      this._lbResult = r;
+      this._postHighScoreLine(this.$screens.querySelector('[data-screen="results"]'));
     });
+  }
+
+  /** The results leaderboard line in the current language. */
+  _postHighScoreLine(root) {
+    const line = root?.querySelector('.result-lb');
+    if (!line) return;
+    const solo = this._lastResults && this._lastResults.config.mode !== 'hosted' && this._lastResults.config.mode !== 'lesson' && !this._lastResults.outcome.localMultiplayer;
+    if (!this.platform.hosted || !solo) { line.hidden = true; return; }
+    const PT = platformStrings();
+    const r = this._lbResult;
+    line.hidden = false;
+    line.textContent = !r ? PT.lbPosting : !r.posted ? PT.lbNotPosted : r.rank ? pfmt(PT.lbRank, { rank: r.rank }) : PT.lbPosted;
   }
 
   retryLast() {
@@ -583,7 +667,7 @@ export class App {
   pendingSnapshot() {
     const snap = loadSessionSnapshot();
     if (!snap || snap.over) return null;
-    const label = `${modeLabel(snap.config)} · ply ${snap.plyAtSave}`;
+    const label = T('{mode} · ply {n}', { mode: modeLabel(snap.config), n: snap.plyAtSave });
     return { snap, label };
   }
 
@@ -594,7 +678,7 @@ export class App {
     this.session = session;
     this.lastConfig = session.config;
     this._enterGame(session.config.mode === 'lesson' ? this.lessonRun?.lesson : null);
-    this.ui.toast(`Welcome back — the court is at ply ${away.resumedAtPly}.`, 'info', 4000);
+    this.ui.toast(T('Welcome back — the court is at ply {n}.', { n: away.resumedAtPly }), 'info', 4000);
   }
 
   _checkResumeOffer() {
@@ -612,7 +696,7 @@ export class App {
       this.renderer.setPaused(!hosted);
       this.audio.pause();
       this._pauseModal = new Modal(this.$overlay, {
-        title: 'Paused',
+        title: T('Paused'),
         onClose: () => {
           this._pauseModal = null;
           this.session?.resume();
@@ -621,17 +705,25 @@ export class App {
         },
       });
       const box = this._pauseModal.box;
-      box.appendChild(el('h2', { text: 'Paused' }));
-      if (hosted) box.appendChild(el('p', { class: 'setup-note', text: 'Hosted round: the clock keeps running while you are away.' }));
-      box.appendChild(el('div', { class: 'pause-actions' }, [
-        button('Resume', () => this._pauseModal?.close(), { kind: 'primary', autofocus: true }),
-        button('Settings', () => this.openSettings(), {}),
-        button('How to play', () => this.openHelp(), {}),
-        button('Leave round', async () => {
-          const ok = await confirmDialog(this.$overlay, { title: 'Leave this round?', body: 'The round will be saved locally unless it is finished.', confirmLabel: 'Leave' });
-          if (ok) { this._pauseModal?.close(); this.exitToTitle(); }
-        }, { kind: 'danger' }),
-      ]));
+      const pauseModal = this._pauseModal;
+      const render = () => {
+        pauseModal.setTitle(T('Paused'));
+        box.replaceChildren(
+          el('h2', { text: T('Paused') }),
+          hosted ? el('p', { class: 'setup-note', text: T('Hosted round: the clock keeps running while you are away.') }) : '',
+          el('div', { class: 'pause-actions' }, [
+            button(T('Resume'), () => this._pauseModal?.close(), { kind: 'primary', autofocus: true }),
+            button(T('Settings'), () => this.openSettings(), {}),
+            button(T('How to play'), () => this.openHelp(), {}),
+            button(T('Leave round'), async () => {
+              const ok = await confirmDialog(this.$overlay, { title: T('Leave this round?'), body: T('The round will be saved locally unless it is finished.'), confirmLabel: T('Leave') });
+              if (ok) { this._pauseModal?.close(); this.exitToTitle(); }
+            }, { kind: 'danger' }),
+          ]),
+        );
+      };
+      render();
+      this._trackModal(pauseModal, render);
       box.querySelector('.btn-primary')?.focus();
     } else if (!wantOpen && this._pauseModal) {
       this._pauseModal.close();
@@ -639,18 +731,29 @@ export class App {
   }
 
   openSettings() {
-    const modal = new Modal(this.$overlay, { title: 'Settings', wide: true });
+    const modal = new Modal(this.$overlay, { title: T('Settings'), wide: true });
     screens.buildSettings(this, modal);
+    this._trackModal(modal);
   }
 
   openProfile() {
-    const modal = new Modal(this.$overlay, { title: 'Profile', wide: true });
+    const modal = new Modal(this.$overlay, { title: T('Profile'), wide: true });
     screens.buildProfile(this, modal);
+    this._trackModal(modal, () => {
+      modal.setTitle(T('Profile'));
+      modal.box.replaceChildren();
+      screens.buildProfile(this, modal);
+    });
   }
 
   openHelp() {
-    const modal = new Modal(this.$overlay, { title: 'Help', wide: true });
+    const modal = new Modal(this.$overlay, { title: T('Help'), wide: true });
     screens.buildHelp(this, modal);
+    this._trackModal(modal, () => {
+      modal.setTitle(T('Help'));
+      modal.box.replaceChildren();
+      screens.buildHelp(this, modal);
+    });
   }
 
   _closeAllModals() {
@@ -724,17 +827,17 @@ export class App {
 
   /** Copy the StarHermit invite link and confirm with a toast. */
   copyInviteLink() {
-    const T = platformStrings();
+    const PT = platformStrings();
     const link = this.platform.inviteLink();
     if (!link) return;
-    const fail = () => this.ui.toast(pfmt(T.copyFail, { link }), 'info', 6000);
-    try { navigator.clipboard.writeText(link).then(() => this.ui.toast(T.copied, 'ok'), fail); } catch { fail(); }
+    const fail = () => this.ui.toast(pfmt(PT.copyFail, { link }), 'info', 6000);
+    try { navigator.clipboard.writeText(link).then(() => this.ui.toast(PT.copied, 'ok'), fail); } catch { fail(); }
   }
 
   /** Guest: accept a friend's table invite and take the seat. */
   async acceptTableInvite(inviteId) {
     const res = await HostedSessionClient.acceptInvite(this.platform, inviteId, { name: this.profile.name });
-    if (!res.ok) return this.ui.toast(res.error || 'Could not join', 'warn');
+    if (!res.ok) return this.ui.toast(T('Could not join'), 'warn');
     this._enterTableRoom(res.client);
   }
 
@@ -799,7 +902,7 @@ export class App {
     const on = this.$domBoardWrap.classList.toggle('pinned');
     this.settings.accessibility.domBoard = on;
     this.saveSettings();
-    this.announce(on ? 'HTML board shown.' : 'HTML board hidden.');
+    this.announce(on ? T('HTML board shown.') : T('HTML board hidden.'));
     return on;
   }
 
@@ -811,7 +914,7 @@ export class App {
     this.saveSettings();
     this.renderer.setCameraPreset(next);
     this.audio.cameraMove();
-    this.ui.toast(`Camera: ${next}`);
+    this.ui.toast(T('Camera: {view}', { view: T({ classic: 'Classic', low: 'Low (near the stone)', top: 'Top-down' }[next]) }));
   }
 
   // --- input routing ---------------------------------------------------------------
@@ -821,7 +924,7 @@ export class App {
     if (action === 'mute') {
       this.settings.audio.muted = !this.settings.audio.muted;
       this.applyAudioSettings();
-      this.ui.toast(this.settings.audio.muted ? 'Muted' : 'Sound on');
+      this.ui.toast(this.settings.audio.muted ? T('Muted') : T('Sound on'));
       return;
     }
     if (action === 'help') { this.openHelp(); return; }
@@ -911,13 +1014,19 @@ export class App {
       this.saveSettings();
       banner.remove();
     };
-    const banner = el('div', { class: 'consent-banner', role: 'dialog', 'aria-label': 'Anonymous stats' }, [
-      el('p', { class: 'consent-text', text: 'Help improve Crown Draughts with anonymous usage stats (round start/end, tutorial steps, errors). No text, pointers, or personal data — ever. Off by default.' }),
-      el('div', { class: 'modal-actions' }, [
-        button('No thanks', () => dismiss(false)),
-        button('Allow', () => dismiss(true), { kind: 'primary' }),
-      ]),
-    ]);
+    const banner = el('div', { class: 'consent-banner', role: 'dialog' });
+    this._consentRelabel = () => {
+      if (!banner.isConnected) { this._consentRelabel = null; return; }
+      banner.setAttribute('aria-label', T('Anonymous stats'));
+      banner.replaceChildren(
+        el('p', { class: 'consent-text', text: T('Help improve Crown Draughts with anonymous usage stats (round start/end, tutorial steps, errors). No text, pointers, or personal data — ever. Off by default.') }),
+        el('div', { class: 'modal-actions' }, [
+          button(T('No thanks'), () => dismiss(false)),
+          button(T('Allow'), () => dismiss(true), { kind: 'primary' }),
+        ]),
+      );
+    };
+    this._consentRelabel();
     this.$overlay.appendChild(banner);
   }
 
@@ -938,9 +1047,9 @@ export class App {
       archiveSave(cmp.local);
       archiveSave(cmp.cloud);
       const useCloud = await confirmDialog(this.$overlay, {
-        title: 'Two saves found',
-        body: `Your local progress (${cmp.local?.at?.slice(0, 10) || 'unknown'}) and the synced save (${cmp.cloud?.at?.slice(0, 10) || 'unknown'}) diverged. Keep the synced save? Both copies are preserved.`,
-        confirmLabel: 'Use synced save',
+        title: T('Two saves found'),
+        body: T('Your local progress ({local}) and the synced save ({cloud}) diverged. Keep the synced save? Both copies are preserved.', { local: cmp.local?.at?.slice(0, 10) || T('unknown'), cloud: cmp.cloud?.at?.slice(0, 10) || T('unknown') }),
+        confirmLabel: T('Use synced save'),
       });
       if (useCloud && cmp.cloud) {
         adoptProgressDoc(cmp.cloud);
@@ -949,6 +1058,35 @@ export class App {
       } else if (localDoc) {
         writeCloudSave(localDoc.payload, localDoc.id, push);
       }
+    }
+  }
+
+  /**
+   * A cloud write lost to a save made on another device. Reload the slot,
+   * merge it with this device's progress (better records, unions of unlocks,
+   * larger counters; the in-progress round lives in the local snapshot and is
+   * untouched), adopt the merge locally and push it as the new cloud save.
+   */
+  async _mergeCloudConflict() {
+    if (this._merging) return;
+    this._merging = true;
+    try {
+      const raw = await this.platform.loadCloudSave();
+      if (this.platform.saveConflicted()) return; // the reload failed; writes stay blocked
+      let remote = null;
+      try { remote = raw ? JSON.parse(raw) : null; } catch { /* corrupt remote */ }
+      const localDoc = loadProgressDoc();
+      if (localDoc) archiveSave(localDoc);
+      if (remote?.payload) { archiveSave(remote); adoptCloudSaveDoc(remote); }
+      const merged = mergeProgress(remote?.payload, this.progress);
+      this.progress = loadProgress();
+      Object.assign(this.progress, merged);
+      saveProgress(this.progress);
+      const doc = loadProgressDoc();
+      if (doc) writeCloudSave(doc.payload, doc.id, true);
+      if (this._screen !== 'game' && this._screen !== 'results' && this._screen !== 'boot') this.go(this._screen, this._screenData, { refresh: true });
+    } finally {
+      this._merging = false;
     }
   }
 
@@ -967,7 +1105,25 @@ export class App {
 
   // --- HUD construction ---------------------------------------------------------
 
-  _buildGameHud() {
+  /** Language change mid-round: rebuild the HUD text, keeping chat, the move
+   *  log, open drawers, the lesson coach and the clocks. */
+  _refreshGameHud() {
+    const chat = document.getElementById('chat-log');
+    const chatNodes = chat ? [...chat.childNodes] : [];
+    const chatDraft = document.getElementById('chat-input')?.value || '';
+    this._buildGameHud({ keepDrawers: true });
+    document.getElementById('chat-log')?.append(...chatNodes);
+    const input = document.getElementById('chat-input');
+    if (input) input.value = chatDraft;
+    const log = document.getElementById('move-log');
+    if (log) for (const entry of this._log) log.appendChild(el('li', { text: entry.render ? entry.render() : entry.text }));
+    if (this._coach) this._coach(false);
+    if (this.session?.clock) this._updateClocks(this.session.clock, this.session.state?.turn);
+    this.game?._updateHud();
+  }
+
+  _buildGameHud({ keepDrawers = false } = {}) {
+    if (!keepDrawers) { this._log = []; this._coach = null; }
     const s = this.session;
     const hosted = s.config.mode === 'hosted';
     const lesson = this.lessonRun?.lesson;
@@ -981,47 +1137,47 @@ export class App {
         el('div', { id: 'turn-banner', class: 'turn-banner', role: 'status' }),
         el('div', { id: 'clock-row', class: 'clock-row' }),
         el('span', { id: 'thinking', class: 'thinking', hidden: true, text: '…' }),
-        button('Pause', () => this.togglePause(true), { kind: 'ghost', class: 'btn btn-ghost pause-btn' }),
+        button(T('Pause'), () => this.togglePause(true), { kind: 'ghost', class: 'btn btn-ghost pause-btn' }),
       ]),
     );
     // left rail: lesson coach or objective/progress + move log
     this.$railLeft.replaceChildren(
       el('section', { class: 'rail-card', id: 'lesson-coach', hidden: !lesson }),
       el('section', { class: 'rail-card' }, [
-        el('h3', { text: 'Progress' }),
+        el('h3', { text: T('Progress') }),
         el('div', { id: 'objective-detail' }),
       ]),
       el('section', { class: 'rail-card move-log-card' }, [
-        el('h3', { text: 'Moves' }),
+        el('h3', { text: T('Moves') }),
         el('ol', { id: 'move-log', class: 'move-log' }),
       ]),
     );
     // right rail: actions + players (+ chat when hosted)
     const actionsCard = el('section', { class: 'rail-card' }, [
-      el('h3', { text: 'Actions' }),
+      el('h3', { text: T('Actions') }),
       el('div', { class: 'action-grid' }, [
-        button('Undo', () => this.game?.requestUndo(), { kind: 'ghost', id: 'btn-undo' }),
-        button('Hint', () => this.game?.requestHint(), { kind: 'ghost', id: 'btn-hint' }),
-        button('Offer draw', () => this._offerDraw(), { kind: 'ghost', id: 'btn-draw' }),
-        button('Resign', () => this._resign(), { kind: 'ghost', id: 'btn-resign' }),
-        button('Camera', () => this.cycleCamera(), { kind: 'ghost' }),
-        button('HTML board', () => this.toggleDomBoard(), { kind: 'ghost' }),
+        button(T('Undo'), () => this.game?.requestUndo(), { kind: 'ghost', id: 'btn-undo' }),
+        button(T('Hint'), () => this.game?.requestHint(), { kind: 'ghost', id: 'btn-hint' }),
+        button(T('Offer draw'), () => this._offerDraw(), { kind: 'ghost', id: 'btn-draw' }),
+        button(T('Resign'), () => this._resign(), { kind: 'ghost', id: 'btn-resign' }),
+        button(T('Camera'), () => this.cycleCamera(), { kind: 'ghost' }),
+        button(T('HTML board'), () => this.toggleDomBoard(), { kind: 'ghost' }),
       ]),
     ]);
     const playersCard = el('section', { class: 'rail-card' }, [
-      el('h3', { text: 'Houses' }),
+      el('h3', { text: T('Houses') }),
       el('ul', { id: 'player-list', class: 'player-list' }),
     ]);
     const chatCard = el('section', { class: 'rail-card chat-card', id: 'chat-card', hidden: !hosted }, [
-      el('h3', { text: 'Chat' }),
+      el('h3', { text: T('Chat') }),
       el('div', { id: 'chat-log', class: 'chat-log', role: 'log', 'aria-live': 'polite' }),
       (() => {
-        const input = el('input', { type: 'text', class: 'text-input', id: 'chat-input', maxlength: '240', placeholder: 'Message…', 'aria-label': 'Chat message' });
-        const send = button('Send', async () => {
+        const input = el('input', { type: 'text', class: 'text-input', id: 'chat-input', maxlength: '240', placeholder: T('Message…'), 'aria-label': T('Chat message') });
+        const send = button(T('Send'), async () => {
           const text = input.value.trim();
           if (!text) return;
           const res = await this.hostedClient?.sendChat(text);
-          if (res && !res.ok) this.ui.toast(res.error === 'rate-limited' ? 'Slow down — 10 messages per minute.' : 'Message not sent', 'warn');
+          if (res && !res.ok) this.ui.toast(res.error === 'rate-limited' ? T('Slow down — 10 messages per minute.') : T('Message not sent'), 'warn');
           else input.value = '';
         }, { kind: 'primary' });
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send.click(); e.stopPropagation(); });
@@ -1037,14 +1193,14 @@ export class App {
       this._syncDrawerButtons();
     }, { kind: 'ghost', class: 'btn btn-ghost drawer-btn', 'aria-expanded': 'false', 'data-drawer': cls });
     this.$tray.replaceChildren(
-      drawerBtn('Info', 'rail-left-open'),
-      button('Undo', () => this.game?.requestUndo(), { kind: 'ghost' }),
-      button('Hint', () => this.game?.requestHint(), { kind: 'ghost' }),
-      button('Draw', () => this._offerDraw(), { kind: 'ghost' }),
-      button('Pause', () => this.togglePause(true), { kind: 'ghost' }),
-      drawerBtn('Actions', 'rail-right-open'),
+      drawerBtn(T('Info'), 'rail-left-open'),
+      button(T('Undo'), () => this.game?.requestUndo(), { kind: 'ghost' }),
+      button(T('Hint'), () => this.game?.requestHint(), { kind: 'ghost' }),
+      button(T('Draw'), () => this._offerDraw(), { kind: 'ghost' }),
+      button(T('Pause'), () => this.togglePause(true), { kind: 'ghost' }),
+      drawerBtn(T('Actions'), 'rail-right-open'),
     );
-    document.body.classList.remove('rail-left-open', 'rail-right-open');
+    if (!keepDrawers) document.body.classList.remove('rail-left-open', 'rail-right-open');
     this._syncDrawerButtons();
     this._placeCoach();
     this.ui.updateHud({ state: s.state, session: s, config: s.config });
@@ -1074,7 +1230,7 @@ export class App {
 
   async _offerDraw() {
     if (!this.session || this.session.phase !== 'active') return;
-    const ok = await confirmDialog(this.$overlay, { title: 'Offer a draw?', confirmLabel: 'Offer' });
+    const ok = await confirmDialog(this.$overlay, { title: T('Offer a draw?'), confirmLabel: T('Offer') });
     if (!ok) return;
     const seat = this.hostedClient ? this.hostedClient.seat : this.session.state.turn;
     this.session.submit({ type: 'offerDraw', player: seat }, seat);
@@ -1082,7 +1238,7 @@ export class App {
 
   async _resign() {
     if (!this.session || this.session.phase !== 'active') return;
-    const ok = await confirmDialog(this.$overlay, { title: 'Resign this round?', confirmLabel: 'Resign', danger: true });
+    const ok = await confirmDialog(this.$overlay, { title: T('Resign this round?'), confirmLabel: T('Resign'), danger: true });
     if (!ok) return;
     const seat = this.hostedClient ? this.hostedClient.seat : this.session.state.turn;
     this.session.submit({ type: 'resign', player: seat }, seat);
@@ -1122,10 +1278,14 @@ export class App {
     if (this.settings.audio.voiceCues) this.audio.speak(msg);
   }
 
-  _addLogEntry(text) {
+  /** entry: a string, or { text, render } where render() re-describes it in the current language. */
+  _addLogEntry(entry) {
+    const e = typeof entry === 'string' ? { text: entry } : entry;
+    this._log.push(e);
+    if (this._log.length > 60) this._log.shift();
     const log = document.getElementById('move-log');
     if (!log) return;
-    const li = el('li', { text });
+    const li = el('li', { text: e.text });
     log.appendChild(li);
     while (log.children.length > 60) log.firstChild.remove();
     log.scrollTop = log.scrollHeight;
@@ -1144,7 +1304,7 @@ export class App {
     if (turnEl && state.phase === 'active') {
       const pl = state.players[state.turn];
       const mine = this.hostedClient ? state.turn === this.hostedClient.seat : pl.kind === 'human';
-      turnEl.textContent = `${pl.name} to move${mine ? ' — you' : ''}`;
+      turnEl.textContent = T(mine ? '{name} to move — you' : '{name} to move', { name: T(pl.name) });
       turnEl.dataset.color = pl.color;
     }
     // players list with material
@@ -1154,7 +1314,7 @@ export class App {
       list.replaceChildren(...state.players.map((pl, i) => {
         const st = stats[i];
         return el('li', { class: i === state.turn ? 'active' : '', dataset: { color: pl.color } }, [
-          el('span', { class: 'player-chip', text: pl.name }),
+          el('span', { class: 'player-chip', text: T(pl.name) }),
           el('span', { class: 'player-mat', text: `${st.piecesLeft}⬤ ${st.crownedLeft}♛` }),
         ]);
       }));
@@ -1163,10 +1323,10 @@ export class App {
     const detail = document.getElementById('objective-detail');
     if (detail) {
       const bits = [];
-      if (config?.par) bits.push(`Par: ${config.par} plies (now ${state.ply})`);
-      if (config?.goal?.maxPlies) bits.push(`Must win by ply ${config.goal.maxPlies} (now ${state.ply})`);
-      if (config?.goal?.maxLost != null) bits.push(`Lose at most ${config.goal.maxLost} pieces`);
-      bits.push(`Draw clock: ${state.sinceProgress}/${RULESETS[state.ruleset].drawPlies}`);
+      if (config?.par) bits.push(T('Par: {par} plies (now {ply})', { par: config.par, ply: state.ply }));
+      if (config?.goal?.maxPlies) bits.push(T('Must win by ply {n} (now {ply})', { n: config.goal.maxPlies, ply: state.ply }));
+      if (config?.goal?.maxLost != null) bits.push(T('Lose at most {n} pieces', { n: config.goal.maxLost }));
+      bits.push(T('Draw clock: {n}/{max}', { n: state.sinceProgress, max: RULESETS[state.ruleset].drawPlies }));
       detail.replaceChildren(...bits.map((b) => el('p', { class: 'objective-fact', text: b })));
     }
     // lesson coach highlight of allowed pieces
@@ -1188,62 +1348,70 @@ export class App {
     row.replaceChildren(...clock.map((ms, i) => {
       const total = Math.max(0, Math.round(ms / 1000));
       const txt = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
-      return el('span', { class: `clock${i === turn ? ' active' : ''}${total <= 10 ? ' low' : ''}`, text: `${this.session.state.players[i]?.name || i}: ${txt}` });
+      return el('span', { class: `clock${i === turn ? ' active' : ''}${total <= 10 ? ' low' : ''}`, text: `${T(this.session.state.players[i]?.name) || i}: ${txt}` });
     }));
   }
 
   _showLessonStep(lesson, step, idx) {
-    const coach = document.getElementById('lesson-coach');
-    if (!coach) return;
-    coach.hidden = false;
-    coach.replaceChildren(
-      el('h3', { text: `${lesson.title} — step ${idx + 1}/${lesson.steps.length}` }),
-      el('p', { class: 'lesson-text', text: step.text }),
-      step.kind === 'read'
-        ? button('Continue', () => this.lessonAdvance(), { kind: 'primary' })
-        : el('p', { class: 'lesson-goal', text: 'Your turn — play the move.' }),
-    );
-    this.announce(step.text);
+    this._coach = (fresh = true) => {
+      const coach = document.getElementById('lesson-coach');
+      if (!coach) return;
+      coach.hidden = false;
+      coach.replaceChildren(
+        el('h3', { text: T('{title} — step {n}/{total}', { title: T(lesson.title), n: idx + 1, total: lesson.steps.length }) }),
+        el('p', { class: 'lesson-text', text: T(step.text) }),
+        step.kind === 'read'
+          ? button(T('Continue'), () => this.lessonAdvance(), { kind: 'primary' })
+          : el('p', { class: 'lesson-goal', text: T('Your turn — play the move.') }),
+      );
+      this._placeCoach();
+      if (fresh) this.announce(T(step.text));
+    };
+    this._coach();
   }
 
   _lessonStepComplete(step) {
     this.audio.achievement();
-    const coach = document.getElementById('lesson-coach');
-    this._placeCoach();
-    if (coach) {
-      coach.replaceChildren(
-        el('h3', { text: 'Well played' }),
-        el('p', { class: 'lesson-text', text: step.success || 'Step complete.' }),
-        button('Continue', () => this.lessonAdvance(), { kind: 'primary' }),
-      );
-      coach.querySelector('button')?.focus();
-    }
-    this.announce(step.success || 'Step complete', true);
+    this._coach = (fresh = true) => {
+      const coach = document.getElementById('lesson-coach');
+      this._placeCoach();
+      if (coach) {
+        coach.hidden = false;
+        coach.replaceChildren(
+          el('h3', { text: T('Well played') }),
+          el('p', { class: 'lesson-text', text: step.success ? T(step.success) : T('Step complete.') }),
+          button(T('Continue'), () => this.lessonAdvance(), { kind: 'primary' }),
+        );
+        if (fresh) coach.querySelector('button')?.focus();
+      }
+      if (fresh) this.announce(step.success ? T(step.success) : T('Step complete.'), true);
+    };
+    this._coach();
     this.platform.track('tutorial_step', { mode: 'lesson', reason: 'step' });
   }
 }
 
 function objectiveTitle(config, lesson) {
-  if (lesson) return `Lesson: ${lesson.title}`;
+  if (lesson) return T('Lesson: {title}', { title: T(lesson.title) });
   switch (config?.mode) {
-    case 'practice': return 'Practice';
-    case 'journey': return `Journey · ${config.contentId}`;
-    case 'daily': return 'Daily Court';
-    case 'challenge': return 'Challenge';
-    case 'hosted': return 'Hosted round';
-    case 'local': return 'Pass & Play';
-    default: return 'Crown Draughts';
+    case 'practice': return T('Practice');
+    case 'journey': return T('Journey · {stage}', { stage: config.contentId });
+    case 'daily': return T('Daily Court');
+    case 'challenge': return T('Challenge');
+    case 'hosted': return T('Hosted round');
+    case 'local': return T('Pass & Play');
+    default: return T('Crown Draughts');
   }
 }
 
 function objectiveSub(config) {
   const bits = [];
-  if (config?.ruleset) bits.push(RULESETS[config.ruleset]?.name || config.ruleset);
-  if (config?.ranked) bits.push('ranked');
-  if (config?.goal?.maxPlies) bits.push(`win in ${config.goal.maxPlies}`);
+  if (config?.ruleset) bits.push(T(RULESETS[config.ruleset]?.name || config.ruleset));
+  if (config?.ranked) bits.push(T('ranked'));
+  if (config?.goal?.maxPlies) bits.push(T('win in {n}', { n: config.goal.maxPlies }));
   return bits.join(' · ');
 }
 
 function modeLabel(config) {
-  return objectiveTitle(config) + (config?.ruleset ? ` — ${RULESETS[config.ruleset]?.name}` : '');
+  return objectiveTitle(config) + (config?.ruleset ? ` — ${T(RULESETS[config.ruleset]?.name)}` : '');
 }

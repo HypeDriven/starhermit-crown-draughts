@@ -11,7 +11,7 @@
 
 import { Emitter } from './session.js';
 import { Session } from './session.js';
-import { RULESETS, deserialize, serialize, legalActions, describeAction, terminalReasonText, playerStats } from '../rules/engine.js';
+import { RULESETS, deserialize, serialize, legalActions, describeAction, terminalReasonText, playerStats, translateText as tr } from '../rules/engine.js';
 
 let counter = 0;
 
@@ -152,6 +152,8 @@ export class HostedSessionClient extends Emitter {
       },
       // Token renewal refused on reconnect: the table is gone for good.
       onAuthLost: () => this.emit('authLost'),
+      onTermsRequired: () => this.emit('termsRequired'),
+      onUnavailable: (code) => this.emit('unavailable', code),
     });
   }
 
@@ -327,10 +329,10 @@ export class HostedSessionClient extends Emitter {
           action.from = piece ? [piece.r, piece.c] : null;
         }
         const description = describeAction(prevState, action);
-        this.emit('action', { action, description, remote: true });
+        this.emit('action', { action, description, remote: true, before: prevState });
       }
       if (this.state.ply - prevPly > 1) {
-        this.emit('announce', { text: `While you were away, ${this.state.ply - prevPly} ${this.state.ply - prevPly === 1 ? 'move was' : 'moves were'} played.` });
+        this.emit('announce', { text: tr('While you were away, {n} moves were played.', { n: this.state.ply - prevPly }) });
       }
     }
     this.emit('state', this.state);

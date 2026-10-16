@@ -79,14 +79,17 @@ export function challengeById(id) {
   return CHALLENGES.find((c) => c.id === id) || null;
 }
 
-/** Human-readable constraint summary for the setup screen. */
-export function constraintSummary(c) {
+const plain = (key, vars) => String(key).replace(/\{(\w+)\}/g, (m, k) => (vars && vars[k] != null ? String(vars[k]) : m));
+
+/** Human-readable constraint summary for the setup screen (t: the UI translator). */
+export function constraintSummary(c, tr = plain) {
   const out = [];
-  if (c.goal?.maxPlies) out.push(`win within ${c.goal.maxPlies} plies`);
-  if (Number.isFinite(c.goal?.maxLost)) out.push(`lose at most ${c.goal.maxLost} pieces`);
-  if (c.constraints?.clockMs) out.push(`${Math.round(c.constraints.clockMs / 1000)}s clock each`);
-  if (c.constraints?.noUndo) out.push('no undo');
-  if (c.constraints?.noHints) out.push('no hints');
-  if (c.constraints?.localMultiplayer) out.push('2–4 local players');
-  return out.length ? out.join(' · ') : 'no special constraints';
+  if (c.goal?.maxPlies) out.push(tr('win within {n} plies', { n: c.goal.maxPlies }));
+  if (Number.isFinite(c.goal?.maxLost)) out.push(tr('lose at most {n} pieces', { n: c.goal.maxLost }));
+  if (c.constraints?.clockMs) out.push(tr('{n}s clock each', { n: Math.round(c.constraints.clockMs / 1000) }));
+  if (c.constraints?.noUndo) out.push(tr('no undo'));
+  if (c.constraints?.noHints) out.push(tr('no hints'));
+  if (c.constraints?.localMultiplayer) out.push(tr('2–4 local players'));
+  return out.length ? out.join(' · ') : tr('no special constraints');
 }
+

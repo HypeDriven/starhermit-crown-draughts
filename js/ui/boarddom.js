@@ -4,6 +4,7 @@
 // be pinned visible beside/over the canvas.
 
 import { isPlayable, squareName } from '../rules/engine.js';
+import { T } from '../i18n/index.js';
 
 const PIECE_GLYPH = { ivory: '●', onyx: '○', jade: '◆', ember: '▲' };
 const CROWN_MARK = '♛';
@@ -29,7 +30,7 @@ export class DomBoard {
     this.grid = document.createElement('div');
     this.grid.className = 'dom-board';
     this.grid.setAttribute('role', 'grid');
-    this.grid.setAttribute('aria-label', 'Game board');
+    this.grid.setAttribute('aria-label', T('Game board'));
     this.container.replaceChildren(this.grid);
   }
 
@@ -113,6 +114,7 @@ export class DomBoard {
 
   render() {
     const st = this.state;
+    this.grid.setAttribute('aria-label', T('Game board'));
     if (!st || !this.cells) return;
     const at = new Map();
     for (const p of st.pieces) {
@@ -137,12 +139,12 @@ export class DomBoard {
           btn.dataset.piece = pl.color;
           btn.dataset.crowned = p.crowned ? '1' : '';
           btn.textContent = `${PIECE_GLYPH[pl.color] || '●'}${p.crowned ? CROWN_MARK : ''}`;
-          btn.setAttribute('aria-label', `${squareName(r, c)}: ${pl.name} ${p.crowned ? 'crowned piece' : 'piece'}${isSelected ? ', selected' : ''}`);
+          btn.setAttribute('aria-label', `${squareName(r, c)}: ${T(p.crowned ? '{name} crowned piece' : '{name} piece', { name: T(pl.name) })}${isSelected ? T(', selected') : ''}`);
         } else {
           btn.dataset.piece = '';
           btn.dataset.crowned = '';
           btn.textContent = '';
-          btn.setAttribute('aria-label', `${squareName(r, c)}: empty${isTarget ? ' — legal destination' : ''}`);
+          btn.setAttribute('aria-label', `${squareName(r, c)}: ${T('empty')}${isTarget ? T(' — legal destination') : ''}`);
         }
       }
     }
@@ -155,7 +157,7 @@ export class DomBoard {
     const parts = st.players.map((pl) => {
       const mine = st.pieces.filter((p) => !p.captured && p.owner === pl.id);
       const crowns = mine.filter((p) => p.crowned).length;
-      return `${pl.name}: ${mine.length} pieces${crowns ? ` (${crowns} crowned)` : ''}${pl.eliminated ? ', eliminated' : ''}`;
+      return `${T(pl.name)}: ${T('{n} pieces', { n: mine.length })}${crowns ? ` ${T('({n} crowned)', { n: crowns })}` : ''}${pl.eliminated ? T(', eliminated') : ''}`;
     });
     return parts.join('. ');
   }

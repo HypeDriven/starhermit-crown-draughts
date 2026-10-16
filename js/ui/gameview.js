@@ -2,7 +2,8 @@
 // renderer, the semantic DOM board, HUD, and input. Handles selection,
 // chains, drag, invalid-action explanation, clocks, pause, and results.
 
-import { legalActionsForPiece, squareName, INVALID_REASON_TEXT } from '../rules/engine.js';
+import { legalActionsForPiece, squareName, INVALID_REASON_TEXT, describeAction } from '../rules/engine.js';
+import { T, N } from '../i18n/index.js';
 import { lessonGoalMet } from '../content/lessons.js';
 
 export class GameController {
@@ -117,8 +118,7 @@ export class GameController {
         from: `${action.from[0]},${action.from[1]}`,
         to: `${action.path.at(-1)[0]},${action.path.at(-1)[1]}`,
       };
-      const pl = this.state.players[action.piece !== undefined ? this._moverOf(action) : 0];
-      this.app.ui.addLogEntry(description);
+      this.app.ui.addLogEntry(this._logEntry(description, action, before));
       this.app.ui.announce(description);
       // Only the player's own move is judged against the lesson goal; the
       // opponent's reply must not trigger the "not what this lesson is about" nudge.
@@ -132,11 +132,16 @@ export class GameController {
       this.candidates = [];
     } else {
       if (action.type === 'offerDraw') audio.drawOffer();
-      this.app.ui.addLogEntry(description);
+      this.app.ui.addLogEntry(this._logEntry(description, action, before));
       this.app.ui.announce(description);
     }
     if (remote) this.app.audio.opponentTurn(); else this.app.audio.turn();
     this._updateHud();
+  }
+
+  /** A move-log entry that re-describes itself after a language change. */
+  _logEntry(text, action, before) {
+    return { text, render: before ? () => describeAction(before, action) : null };
   }
 
   _moverOf(action) {
@@ -147,8 +152,8 @@ export class GameController {
   _onInvalid({ reason, message }) {
     if (reason === 'must-capture') this.app.audio.mandatoryCapture();
     else this.app.audio.invalid();
-    this.app.ui.toast(message || INVALID_REASON_TEXT[reason] || 'Not legal', 'warn');
-    this.app.ui.announce(message || 'That move is not legal', true);
+    this.app.ui.toast(T(message || INVALID_REASON_TEXT[reason] || N('Not legal')), 'warn');
+    this.app.ui.announce(T(message || N('That move is not legal')), true);
     const v = this.selected != null ? this.app.renderer.board?.pieces.get(this.selected) : null;
     if (v) v.wobble = 1;
   }
@@ -156,8 +161,8 @@ export class GameController {
   _onHint({ action, description }) {
     this.app.audio.hint();
     const piece = this.state.pieces[action.piece];
-    this.app.ui.toast(`Hint: ${description}`, 'info', 4000);
-    this.app.ui.announce(`Hint: ${description}`);
+    this.app.ui.toast(T('Hint: {move}', { move: description }), 'info', 4000);
+    this.app.ui.announce(T('Hint: {move}', { move: description }));
     // flash the piece and its destination
     this._selectPiece(action.piece);
   }
@@ -191,7 +196,7 @@ export class GameController {
       this.app.ui.lessonStepComplete(step);
     } else if (step.goal.kind !== 'finish' && step.goal.kind !== 'finish-win') {
       // wrong move for the lesson: rewind politely
-      this.app.ui.toast('That works, but it is not what this lesson is about — try the shown move.', 'warn');
+      this.app.ui.toast(T('That works, but it is not what this lesson is about — try the shown move.'), 'warn');
     }
   }
 
@@ -250,7 +255,7 @@ export class GameController {
         const p = st.pieces[pieceId];
         const allowed = step.allowPieces.some(([r, c]) => r === p.r && c === p.c);
         if (!allowed) {
-          this._onInvalid({ reason: 'not-your-piece', message: 'This lesson asks you to move a different piece — it glows gold.' });
+          this._onInvalid({ reason: 'not-your-piece', message: N('This lesson asks you to move a different piece — it glows gold.') });
           return;
         }
       }
@@ -259,7 +264,7 @@ export class GameController {
       const mustCapture = all.some((a) => a.captures.length > 0);
       this._onInvalid({
         reason: mustCapture ? 'must-capture' : 'illegal-target',
-        message: mustCapture ? INVALID_REASON_TEXT['must-capture'] : 'That piece has no legal move.',
+        message: mustCapture ? INVALID_REASON_TEXT['must-capture'] : N('That piece has no legal move.'),
       });
       return;
     }
@@ -308,7 +313,7 @@ export class GameController {
     }
     if (longer.length > 0) {
       this.app.audio.chainStep();
-      this.app.ui.announce(`Chain continues — ${longer.length} follow-up ${longer.length === 1 ? 'jump' : 'jumps'} available.`);
+      this.app.ui.announce(longer.length === 1 ? T('Chain continues — 1 follow-up jump available.') : T('Chain continues — {n} follow-up jumps available.', { n: longer.length }));
       this.candidates = [...longer, ...complete.filter((a) => longer.length === 0)];
       this._refreshSelection();
       return;
@@ -412,7 +417,7 @@ export class GameController {
         const wrap = document.getElementById('dom-board-container');
         if (wrap && !wrap.classList.contains('pinned')) {
           this.app.toggleDomBoard();
-          this.app.ui.announce('HTML board shown. Arrow keys move the cursor; Enter selects.');
+          this.app.ui.announce(T('HTML board shown. Arrow keys move the cursor; Enter selects.'));
         }
         // The pinned HTML board draws rows from top to bottom.
         if (action === 'up') b.moveCursor(-1, 0);
@@ -442,7 +447,7 @@ export class GameController {
 
   requestUndo() {
     if (!this.session.canUndo?.()) {
-      this.app.ui.toast('Undo is not available here.', 'warn');
+      this.app.ui.toast(T('Undo is not available here.'), 'warn');
       return;
     }
     const res = this.session.undo();
@@ -451,7 +456,7 @@ export class GameController {
 
   requestHint() {
     if (!this.session.canHint?.()) {
-      this.app.ui.toast('Hints are disabled for this round.', 'warn');
+      this.app.ui.toast(T('Hints are disabled for this round.'), 'warn');
       return;
     }
     this.session.hint();

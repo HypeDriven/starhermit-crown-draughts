@@ -37,6 +37,7 @@ export class Platform {
     this.telemetryQueue = [];
     this._syncListeners = new Set();
     this._authListeners = new Set();
+    this._conflictListeners = new Set();
     this._started = false;
     this._patch = null;
     this._patchTimer = null;
@@ -52,6 +53,9 @@ export class Platform {
       this._started = true;
       try { s.init(); } catch { /* malformed launch: stay standalone */ }
       s.on('saved', (ok) => { if (this.hosted) this._setSync(ok ? 'synced' : 'offline'); });
+      // Another device saved since our last load: the SDK refused the write and
+      // blocks further writes until the game reloads and merges.
+      s.on('saveconflict', () => { for (const fn of this._conflictListeners) { try { fn(); } catch { /* ok */ } } });
       s.on('auth', (a) => {
         const was = this.hosted;
         this.mode = a && a.signedIn && s.slug ? 'hosted' : 'standalone';
@@ -79,6 +83,9 @@ export class Platform {
   get launchToken() { return sdk()?.token || null; }
 
   onAuth(fn) { if (typeof fn === 'function') this._authListeners.add(fn); }
+  onSaveConflict(fn) { if (typeof fn === 'function') this._conflictListeners.add(fn); }
+  /** True while a lost write blocks cloud saves (cleared by loadCloudSave()). */
+  saveConflicted() { return !!sdk()?.saveConflicted?.(); }
   canSignIn() { return !!sdk()?.canSignIn(); }
   signIn() { return !!sdk()?.signIn(); }
   inviteLink() { return this.hosted ? sdk()?.inviteLink() || null : null; }
@@ -268,10 +275,13 @@ export class Platform {
    * (1 s doubling to 30 s); every reconnect first renews the launch token
    * (StarHermit.renewForReconnect) and rebuilds the URL from the current token,
    * because a refused handshake looks like a plain drop (1006). 'retry' backs
-   * off and renews again; 'relaunch' stops for good and calls onAuthLost().
+   * off and renews again; 'relaunch' stops for good and calls onAuthLost();
+   * 'terms-required' (the player must accept updated terms on StarHermit)
+   * stops the same way and calls onTermsRequired(). A close with 4404 (room
+   * gone) or 4403 (no longer a member) ends the loop and calls onUnavailable().
    * Returns { send, close }.
    */
-  openRoomSocket(roomId, { onMessage, onOpen, onClose, onAuthLost } = {}) {
+  openRoomSocket(roomId, { onMessage, onOpen, onClose, onAuthLost, onTermsRequired, onUnavailable } = {}) {
     const s = sdk();
     const PREFIX_LEN = 16;
     let ws = null, closed = false, delay = 1000, timer = null;
@@ -283,6 +293,7 @@ export class Platform {
         if (closed) return;
         if (r === 'renewed') open();
         else if (r === 'retry') later(reconnect);
+        else if (r === 'terms-required') { closed = true; try { (onTermsRequired || onAuthLost)?.(); } catch { /* ok */ } }
         else { closed = true; try { onAuthLost?.(); } catch { /* ok */ } }
       }, () => { if (!closed) later(reconnect); });
     };
@@ -305,7 +316,8 @@ export class Platform {
       ws.onclose = (ev) => {
         try { onClose?.(ev); } catch { /* ok */ }
         const code = ev && ev.code;
-        if (closed || code === 1000 || code === 4403 || code === 4404) return;
+        if (closed || code === 1000) return;
+        if (code === 4403 || code === 4404) { closed = true; try { onUnavailable?.(code); } catch { /* ok */ } return; }
         later(reconnect);
       };
       ws.onerror = () => { /* surfaced via onclose */ };

@@ -3,6 +3,7 @@
 // the same picker as the Graphics strings.
 
 import { pickLocale } from './gfx-i18n.js';
+import { getLang } from '../i18n/index.js';
 
 export const PLATFORM_STRINGS = {
   'en-US': {
@@ -13,6 +14,7 @@ export const PLATFORM_STRINGS = {
     tableInvites: 'Table invites', noInvites: 'No table invites right now.', join: 'Join', from: 'From {name}',
     expiredTitle: 'Your session expired', expiredBody: 'Your StarHermit session has ended, so online play stopped. Head back to StarHermit to start a fresh session.',
     relaunch: 'Back to StarHermit', keepPlaying: 'Keep playing here', relaunchFailed: 'Could not open StarHermit — reopen the game from StarHermit.',
+    termsTitle: 'Sign-in needs your attention', termsBody: 'StarHermit needs you to review and accept its updated terms, so online play stopped. Head back to StarHermit to accept them and start a fresh session.',
     lbPosting: 'Posting score to the leaderboard…',
     lbRank: 'Leaderboard rank: #{rank}',
     lbPosted: 'Score posted to the leaderboard.',
@@ -26,6 +28,7 @@ export const PLATFORM_STRINGS = {
     tableInvites: 'Table invites', noInvites: 'No table invites right now.', join: 'Join', from: 'From {name}',
     expiredTitle: 'Your session expired', expiredBody: 'Your StarHermit session has ended, so online play has stopped. Head back to StarHermit to start a fresh session.',
     relaunch: 'Back to StarHermit', keepPlaying: 'Keep playing here', relaunchFailed: 'Could not open StarHermit — reopen the game from StarHermit.',
+    termsTitle: 'Sign-in needs your attention', termsBody: 'StarHermit needs you to review and accept its updated terms, so online play has stopped. Head back to StarHermit to accept them and start a fresh session.',
     lbPosting: 'Posting score to the leaderboard…',
     lbRank: 'Leaderboard rank: #{rank}',
     lbPosted: 'Score posted to the leaderboard.',
@@ -39,6 +42,7 @@ export const PLATFORM_STRINGS = {
     tableInvites: 'Invitaciones a mesas', noInvites: 'No hay invitaciones a mesas por ahora.', join: 'Unirse', from: 'De {name}',
     expiredTitle: 'Tu sesión expiró', expiredBody: 'Tu sesión de StarHermit terminó y el juego en línea se detuvo. Vuelve a StarHermit para iniciar una sesión nueva.',
     relaunch: 'Volver a StarHermit', keepPlaying: 'Seguir jugando aquí', relaunchFailed: 'No se pudo abrir StarHermit. Vuelve a abrir el juego desde StarHermit.',
+    termsTitle: 'Tu sesión necesita atención', termsBody: 'StarHermit necesita que revises y aceptes sus términos actualizados, así que el juego en línea se detuvo. Vuelve a StarHermit para aceptarlos e iniciar una nueva sesión.',
     lbPosting: 'Enviando la puntuación a la clasificación…',
     lbRank: 'Puesto en la clasificación: #{rank}',
     lbPosted: 'Puntuación enviada a la clasificación.',
@@ -52,6 +56,7 @@ export const PLATFORM_STRINGS = {
     tableInvites: 'Invitaciones a mesas', noInvites: 'Ahora mismo no hay invitaciones a mesas.', join: 'Unirse', from: 'De {name}',
     expiredTitle: 'Tu sesión ha caducado', expiredBody: 'Tu sesión de StarHermit ha terminado y el juego en línea se ha detenido. Vuelve a StarHermit para iniciar una sesión nueva.',
     relaunch: 'Volver a StarHermit', keepPlaying: 'Seguir jugando aquí', relaunchFailed: 'No se ha podido abrir StarHermit. Vuelve a abrir el juego desde StarHermit.',
+    termsTitle: 'Tu sesión necesita atención', termsBody: 'StarHermit necesita que revises y aceptes sus condiciones actualizadas, así que el juego en línea se ha detenido. Vuelve a StarHermit para aceptarlas e iniciar una nueva sesión.',
     lbPosting: 'Enviando la puntuación a la clasificación…',
     lbRank: 'Puesto en la clasificación: #{rank}',
     lbPosted: 'Puntuación enviada a la clasificación.',
@@ -65,6 +70,7 @@ export const PLATFORM_STRINGS = {
     tableInvites: 'Tisch-Einladungen', noInvites: 'Zurzeit keine Tisch-Einladungen.', join: 'Beitreten', from: 'Von {name}',
     expiredTitle: 'Deine Sitzung ist abgelaufen', expiredBody: 'Deine StarHermit-Sitzung ist beendet, daher wurde das Online-Spiel gestoppt. Kehre zu StarHermit zurück, um eine neue Sitzung zu starten.',
     relaunch: 'Zurück zu StarHermit', keepPlaying: 'Hier weiterspielen', relaunchFailed: 'StarHermit konnte nicht geöffnet werden – starte das Spiel erneut über StarHermit.',
+    termsTitle: 'Deine Anmeldung braucht Aufmerksamkeit', termsBody: 'StarHermit möchte, dass du die aktualisierten Nutzungsbedingungen prüfst und akzeptierst, daher wurde das Online-Spiel beendet. Kehre zu StarHermit zurück, um sie zu akzeptieren und eine neue Sitzung zu starten.',
     lbPosting: 'Punktzahl wird an die Bestenliste gesendet…',
     lbRank: 'Platz in der Bestenliste: #{rank}',
     lbPosted: 'Punktzahl an die Bestenliste gesendet.',
@@ -78,6 +84,7 @@ export const PLATFORM_STRINGS = {
     tableInvites: 'Invitations à une table', noInvites: 'Aucune invitation à une table pour le moment.', join: 'Rejoindre', from: 'De {name}',
     expiredTitle: 'Votre session a expiré', expiredBody: 'Votre session StarHermit est terminée : le jeu en ligne s’est arrêté. Retournez sur StarHermit pour ouvrir une nouvelle session.',
     relaunch: 'Retour à StarHermit', keepPlaying: 'Continuer à jouer ici', relaunchFailed: 'Impossible d’ouvrir StarHermit — relancez le jeu depuis StarHermit.',
+    termsTitle: 'Votre session demande votre attention', termsBody: 'StarHermit vous demande de consulter et d’accepter ses conditions mises à jour : le jeu en ligne s’est donc arrêté. Retournez sur StarHermit pour les accepter et démarrer une nouvelle session.',
     lbPosting: 'Envoi du score au classement…',
     lbRank: 'Rang au classement : #{rank}',
     lbPosted: 'Score envoyé au classement.',
@@ -91,6 +98,7 @@ export const PLATFORM_STRINGS = {
     tableInvites: 'Invitations à une table', noInvites: 'Aucune invitation à une table pour le moment.', join: 'Rejoindre', from: 'De {name}',
     expiredTitle: 'Votre session a expiré', expiredBody: 'Votre session StarHermit est terminée : le jeu en ligne s’est arrêté. Retournez sur StarHermit pour ouvrir une nouvelle session.',
     relaunch: 'Retour à StarHermit', keepPlaying: 'Continuer à jouer ici', relaunchFailed: 'Impossible d’ouvrir StarHermit — relancez le jeu à partir de StarHermit.',
+    termsTitle: 'Votre session demande votre attention', termsBody: 'StarHermit vous demande de consulter et d’accepter ses conditions mises à jour : le jeu en ligne s’est donc arrêté. Retournez à StarHermit pour les accepter et démarrer une nouvelle session.',
     lbPosting: 'Envoi du pointage au classement…',
     lbRank: 'Rang au classement : #{rank}',
     lbPosted: 'Pointage envoyé au classement.',
@@ -104,6 +112,7 @@ export const PLATFORM_STRINGS = {
     tableInvites: 'Convites para mesas', noInvites: 'Nenhum convite para mesas no momento.', join: 'Entrar', from: 'De {name}',
     expiredTitle: 'Sua sessão expirou', expiredBody: 'Sua sessão do StarHermit terminou e o jogo online parou. Volte ao StarHermit para iniciar uma nova sessão.',
     relaunch: 'Voltar ao StarHermit', keepPlaying: 'Continuar jogando aqui', relaunchFailed: 'Não foi possível abrir o StarHermit — abra o jogo novamente pelo StarHermit.',
+    termsTitle: 'Sua sessão precisa de atenção', termsBody: 'O StarHermit precisa que você revise e aceite os termos atualizados, então o jogo online parou. Volte ao StarHermit para aceitá-los e iniciar uma nova sessão.',
     lbPosting: 'Enviando a pontuação para o placar…',
     lbRank: 'Posição no placar: #{rank}',
     lbPosted: 'Pontuação enviada ao placar.',
@@ -117,6 +126,7 @@ export const PLATFORM_STRINGS = {
     tableInvites: 'Inviti ai tavoli', noInvites: 'Nessun invito ai tavoli al momento.', join: 'Unisciti', from: 'Da {name}',
     expiredTitle: 'La tua sessione è scaduta', expiredBody: 'La tua sessione StarHermit è terminata e il gioco online si è interrotto. Torna su StarHermit per avviare una nuova sessione.',
     relaunch: 'Torna a StarHermit', keepPlaying: 'Continua a giocare qui', relaunchFailed: 'Impossibile aprire StarHermit: riapri il gioco da StarHermit.',
+    termsTitle: 'La tua sessione richiede attenzione', termsBody: 'StarHermit ha bisogno che tu legga e accetti i termini aggiornati, quindi il gioco online si è interrotto. Torna a StarHermit per accettarli e avviare una nuova sessione.',
     lbPosting: 'Invio del punteggio alla classifica…',
     lbRank: 'Posizione in classifica: #{rank}',
     lbPosted: 'Punteggio inviato alla classifica.',
@@ -124,7 +134,7 @@ export const PLATFORM_STRINGS = {
   },
 };
 
-export function platformStrings(tag = globalThis.navigator?.language) {
+export function platformStrings(tag = getLang()) {
   return PLATFORM_STRINGS[pickLocale(tag)] || PLATFORM_STRINGS['en-US'];
 }
 

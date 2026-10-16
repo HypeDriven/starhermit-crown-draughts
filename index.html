@@ -8,6 +8,7 @@
 <title>Crown Draughts</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23414a37'/%3E%3Ccircle cx='16' cy='19' r='7' fill='%23e8ddc4'/%3E%3Cpath d='M10 12l3 3 3-4 3 4 3-3v6H10z' fill='%23d4af37'/%3E%3C/svg%3E">
+<script src="sh-language.js"></script>
 <script src="game-options.js" data-game="crown-draughts"></script>
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/three/addons/" } }</script>
 <link rel="stylesheet" href="css/main.css?v=2">
@@ -27,19 +28,18 @@
   <div id="scene-region" aria-hidden="true">
     <div id="scene-container"></div>
     <div id="webgl-fallback" hidden>
-      <p><strong>3D view unavailable.</strong> Your browser could not create a WebGL context.
-      The full game remains playable on the HTML board below.</p>
+      <p><strong data-i18n="3D view unavailable.">3D view unavailable.</strong> <span data-i18n="Your browser could not create a WebGL context. The full game remains playable on the HTML board below.">Your browser could not create a WebGL context. The full game remains playable on the HTML board below.</span></p>
     </div>
   </div>
 
   <!-- In-game UI layer -->
   <div id="game-ui" hidden>
     <header id="topbar" class="hud-region"></header>
-    <aside id="rail-left" class="hud-region" aria-label="Objective and progress"></aside>
-    <aside id="rail-right" class="hud-region" aria-label="Actions and status"></aside>
+    <aside id="rail-left" class="hud-region" aria-label="Objective and progress" data-i18n-aria="Objective and progress"></aside>
+    <aside id="rail-right" class="hud-region" aria-label="Actions and status" data-i18n-aria="Actions and status"></aside>
     <div id="coach-dock" class="hud-region" aria-live="polite"></div>
-    <div id="tray-bottom" class="hud-region" aria-label="Quick actions"></div>
-    <div id="dom-board-container" aria-label="HTML board"></div>
+    <div id="tray-bottom" class="hud-region" aria-label="Quick actions" data-i18n-aria="Quick actions"></div>
+    <div id="dom-board-container" aria-label="HTML board" data-i18n-aria="HTML board"></div>
   </div>
 
   <!-- Menu screens -->
@@ -47,8 +47,8 @@
     <section class="screen" data-screen="boot">
       <div class="boot-panel">
         <h1 class="game-title">Crown Draughts</h1>
-        <p class="tagline">Carved stone, quiet gardens, sharp tactics.</p>
-        <div class="boot-bar" role="progressbar" aria-label="Loading"></div>
+        <p class="tagline" data-i18n="Carved stone, quiet gardens, sharp tactics.">Carved stone, quiet gardens, sharp tactics.</p>
+        <div class="boot-bar" role="progressbar" aria-label="Loading" data-i18n-aria="Loading"></div>
       </div>
     </section>
     <section class="screen" data-screen="title" hidden></section>

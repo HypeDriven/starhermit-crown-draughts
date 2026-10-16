@@ -1,6 +1,6 @@
 // Strings for the Graphics settings section, in every supported locale.
-// The rest of the game ships in English; this panel picks its language from
-// navigator.language (falling back by language, then to en-US).
+import { getLang } from '../i18n/index.js';
+// The panel follows the game language (js/i18n: Settings → Language).
 
 const EN_US = {
   heading: 'Graphics quality',
@@ -191,7 +191,8 @@ export function pickLocale(tag) {
   return FALLBACK[lower.slice(0, 2)] || 'en-US';
 }
 
-export function gfxStrings(tag = globalThis.navigator?.language) {
+// The Graphics block follows the game language (js/i18n), like every other string.
+export function gfxStrings(tag = getLang()) {
   return GFX_STRINGS[pickLocale(tag)];
 }
 

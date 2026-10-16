@@ -766,32 +766,37 @@ export function eloDelta(ratingA, ratingB, score, k = 24) {
 // Presentation helpers (announcements, hints)
 // ---------------------------------------------------------------------------
 
+// Text translator for presentation helpers. The browser UI installs the game's
+// T() (js/i18n); the server and tests keep US English with {placeholders} filled.
+let tr = (key, vars) => String(key).replace(/\{(\w+)\}/g, (m, k) => (vars && vars[k] != null ? String(vars[k]) : m));
+export function setTextTranslator(fn) { if (typeof fn === 'function') tr = fn; }
+export function translateText(key, vars) { return tr(key, vars); }
+
 export function describeAction(state, action) {
   if (action.type === 'move') {
     const p = state.pieces[action.piece];
     const who = state.players[p.owner];
-    const kind = p.crowned ? 'crown' : 'piece';
     const from = squareName(action.from[0], action.from[1]);
     const to = squareName(action.path[action.path.length - 1][0], action.path[action.path.length - 1][1]);
-    let s = `${who.name} ${kind} ${from} to ${to}`;
+    let s = tr(p.crowned ? '{name} crown {from} to {to}' : '{name} piece {from} to {to}', { name: tr(who.name), from, to });
     if (action.captures.length) {
       const victims = action.captures.map((id) => {
         const v = state.pieces[id];
-        return `${state.players[v.owner].name} ${v.crowned ? 'crown' : 'piece'} at ${squareName(v.r, v.c)}`;
+        return tr(v.crowned ? '{name} crown at {square}' : '{name} piece at {square}', { name: tr(state.players[v.owner].name), square: squareName(v.r, v.c) });
       });
-      s += `, capturing ${victims.join(' and ')}`;
+      s += tr(', capturing {pieces}', { pieces: victims.reduce((a, b) => tr('{a} and {b}', { a, b })) });
     }
-    if (action.crowns) s += ', and is crowned';
+    if (action.crowns) s += tr(', and is crowned');
     return s;
   }
-  const name = state.players[action.player]?.name || 'A house';
+  const name = tr(state.players[action.player]?.name || 'A house');
   switch (action.type) {
-    case 'resign': return `${name} resigns`;
-    case 'timeout': return `${name} runs out of time`;
-    case 'offerDraw': return `${name} offers a draw`;
-    case 'acceptDraw': return 'The draw is accepted';
-    case 'declineDraw': return 'The draw is declined';
-    default: return 'Unknown action';
+    case 'resign': return tr('{name} resigns', { name });
+    case 'timeout': return tr('{name} runs out of time', { name });
+    case 'offerDraw': return tr('{name} offers a draw', { name });
+    case 'acceptDraw': return tr('The draw is accepted');
+    case 'declineDraw': return tr('The draw is declined');
+    default: return tr('Unknown action');
   }
 }
 
