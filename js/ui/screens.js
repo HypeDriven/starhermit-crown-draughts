@@ -756,7 +756,7 @@ function buildGraphicsQuality(app) {
     }
     syncAdaptive();
     syncFps();
-    summary.textContent = r ? `${inf.gpu} · ${describe(r, inf.pixels, G.sum)}` : inf.gpu;
+    summary.textContent = r ? `${inf.gpu} · ${fmt(G.level, { n: inf.level ?? 0 })} · ${describe(r, inf.pixels, G.sum)}` : inf.gpu;
     summary.dataset.gfxPreset = r?.preset || '';
     note.hidden = !inf.postFailed;
   }

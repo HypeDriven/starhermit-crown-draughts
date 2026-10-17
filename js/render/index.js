@@ -18,7 +18,17 @@ import { UnrealBloomPass } from '../../vendor/three/addons/postprocessing/Unreal
 import { SMAAPass } from '../../vendor/three/addons/postprocessing/SMAAPass.js';
 import { FXAAShader } from '../../vendor/three/addons/shaders/FXAAShader.js';
 import { RoomEnvironment } from '../../vendor/three/addons/environments/RoomEnvironment.js';
-import { detectPreset, describe, resolve, SHADOW_MAP } from './gfx.js';
+import { detectLevel, presetForLevel, describe, resolve, SHADOW_MAP } from './gfx.js';
+import { setAssetBudget } from './materials.js';
+
+// Run a post pass at a fraction of the frame (per-preset budget). EffectComposer sizes every pass to the
+// full frame in addPass/setSize, so the pass's own setSize is wrapped to apply the scale.
+function atScale(pass, k) {
+  if (!(k > 0 && k < 1)) return pass;
+  const setSize = pass.setSize.bind(pass);
+  pass.setSize = (w, h) => setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+  return pass;
+}
 
 // Colour grade + vignette, applied in display space after the output pass:
 // gentle S-curve, a touch more saturation, warm highlights / cool shadows.
@@ -102,7 +112,12 @@ export class RenderFacade {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer = renderer;
     this.gpu = RenderFacade._gpuName(renderer);
-    this.detected = detectPreset(this.gpu, { mobile: isMobileDevice() });
+    // StarHermit hardware level → Auto preset (SwiftShader = level 0 → Low; phones cap at Balanced).
+    const system = globalThis.StarHermitGpu ? globalThis.StarHermitGpu.detectSystem() : { mobile: isMobileDevice() };
+    this.level = detectLevel(this.gpu, { ...system, mobile: system.mobile || isMobileDevice() });
+    this.detected = presetForLevel(this.level);
+    this.q = resolve({}, this.detected, this.level);
+    setAssetBudget(this.q.budget);
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(FRAMING.fov, 1, FRAMING.near, FRAMING.far);
@@ -180,9 +195,14 @@ export class RenderFacade {
   /** Apply saved graphics settings ({} = auto). Live: no reload needed. */
   setGraphics(saved) {
     if (!this.ok && !this.renderer) { this.q = resolve(saved, 'low'); return; }
-    const g = resolve(saved, this.detected);
+    const g = resolve(saved, this.detected, this.level);
     const prevShadows = this.q?.shadows;
+    const pb = this.q?.budget || {};
     this.q = g;
+    setAssetBudget(g.budget);
+    // Asset variants (material class, texture size, piece LOD, garden counts) are built into the
+    // meshes: rebuild the garden and board when the preset's budget changes them.
+    const rebuild = this.garden && ['material', 'texture', 'pieceSegs', 'crownSegs', 'tufts', 'ambient'].some((k) => pb[k] !== g.budget[k]);
     const size = SHADOW_MAP[g.shadows];
     this.renderer.shadowMap.enabled = size > 0;
     this.sun.castShadow = size > 0;
@@ -198,6 +218,7 @@ export class RenderFacade {
         for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.needsUpdate = true;
       });
     }
+    if (rebuild) this.setTheme(this.themeId, this._seed || 1, true);
     this._applyEnv();
     this.fx?.setTier(g.particles === 'high' ? 'high' : 'low');
     this.garden?.setDetail(g);
@@ -209,6 +230,7 @@ export class RenderFacade {
     this._fpsVisible(g.showFps);
     if (this.canvas) this.canvas.dataset.gfxPreset = g.preset;
     document.body.dataset.gfxPreset = g.preset;
+    document.body.classList.toggle('gfx-hud-blur', !!g.budget.hudBlur);
     this.resize();
   }
 
@@ -217,6 +239,7 @@ export class RenderFacade {
     const px = [Math.round(this.size[0] * this.pixelRatio), Math.round(this.size[1] * this.pixelRatio)];
     return {
       gpu: this.gpu || 'unknown GPU',
+      level: this.level ?? 0,
       detected: this.detected || 'low',
       resolved: this.q,
       summary: describe(this.q, px),
@@ -296,7 +319,7 @@ export class RenderFacade {
       composer.setSize(w, h);
       composer.addPass(new RenderPass(this.scene, this.camera));
       if (g.ao !== 'off') {
-        const ao = new GTAOPass(this.scene, this.camera, w * pr, h * pr);
+        const ao = atScale(new GTAOPass(this.scene, this.camera, w * pr, h * pr), g.budget?.aoRes ?? 1);
         ao.output = GTAOPass.OUTPUT.Default;
         ao.blendIntensity = 0.75;
         ao.updateGtaoMaterial({ radius: 0.45, distanceExponent: 1.6, thickness: 1.0, scale: 1.0, samples: g.ao === 'high' ? 16 : 8 });
@@ -306,7 +329,7 @@ export class RenderFacade {
       if (g.bloom === 'on') {
         // HDR threshold (pre-tone-mapping luminance): only lanterns, torches and
         // specular glints on gold crowns and polished stone bloom.
-        composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.5, 0.45, 2.4));
+        composer.addPass(atScale(new UnrealBloomPass(new THREE.Vector2(w, h), 0.5, 0.45, 2.4), g.budget?.bloomRes ?? 1));
       }
       composer.addPass(new OutputPass());
       if (g.grade === 'on') composer.addPass(new ShaderPass(GradeShader));

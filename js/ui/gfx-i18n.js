@@ -20,6 +20,7 @@ const EN_US = {
   adaptive: 'Adaptive resolution',
   adaptiveHint: 'Lowers the resolution while frames are slow.',
   showFps: 'Show frame rate',
+  level: 'Level {n}',
   postNote: 'Post-processing is unavailable on this device, so the game renders without it.',
   sum: {
     noShadows: 'no shadows', shadows: 'shadows', ao: 'ambient occlusion', aoHigh: 'full ambient occlusion',
@@ -50,6 +51,7 @@ const ES_419 = {
   adaptive: 'Resolución adaptable',
   adaptiveHint: 'Reduce la resolución cuando los fotogramas van lentos.',
   showFps: 'Mostrar fotogramas por segundo',
+  level: 'Nivel {n}',
   postNote: 'El posprocesado no está disponible en este dispositivo; el juego se muestra sin él.',
   sum: {
     noShadows: 'sin sombras', shadows: 'sombras', ao: 'oclusión ambiental', aoHigh: 'oclusión ambiental completa',
@@ -83,6 +85,7 @@ const DE_DE = {
   adaptive: 'Adaptive Auflösung',
   adaptiveHint: 'Senkt die Auflösung, solange Bilder langsam laufen.',
   showFps: 'Bildrate anzeigen',
+  level: 'Stufe {n}',
   postNote: 'Nachbearbeitung ist auf diesem Gerät nicht verfügbar; das Spiel wird ohne sie dargestellt.',
   sum: {
     noShadows: 'keine Schatten', shadows: 'Schatten', ao: 'Umgebungsverdeckung', aoHigh: 'volle Umgebungsverdeckung',
@@ -108,6 +111,7 @@ const FR_FR = {
   adaptive: 'Résolution adaptative',
   adaptiveHint: 'Baisse la résolution quand les images ralentissent.',
   showFps: 'Afficher la fréquence d’images',
+  level: 'Niveau {n}',
   postNote: 'Le post-traitement n’est pas disponible sur cet appareil ; le jeu s’affiche sans.',
   sum: {
     noShadows: 'sans ombres', shadows: 'ombres', ao: 'occlusion ambiante', aoHigh: 'occlusion ambiante complète',
@@ -139,6 +143,7 @@ const PT_BR = {
   adaptive: 'Resolução adaptável',
   adaptiveHint: 'Reduz a resolução quando os quadros ficam lentos.',
   showFps: 'Mostrar taxa de quadros',
+  level: 'Nível {n}',
   postNote: 'O pós-processamento não está disponível neste dispositivo; o jogo é exibido sem ele.',
   sum: {
     noShadows: 'sem sombras', shadows: 'sombras', ao: 'oclusão ambiente', aoHigh: 'oclusão ambiente completa',
@@ -164,6 +169,7 @@ const IT_IT = {
   adaptive: 'Risoluzione adattiva',
   adaptiveHint: 'Abbassa la risoluzione quando i fotogrammi rallentano.',
   showFps: 'Mostra frequenza fotogrammi',
+  level: 'Livello {n}',
   postNote: 'La post-elaborazione non è disponibile su questo dispositivo; il gioco viene mostrato senza.',
   sum: {
     noShadows: 'senza ombre', shadows: 'ombre', ao: 'occlusione ambientale', aoHigh: 'occlusione ambientale completa',

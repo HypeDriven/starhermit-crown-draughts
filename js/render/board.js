@@ -3,6 +3,7 @@
 // tweens are cosmetic and always settle into the exact deterministic state.
 
 import * as THREE from '../../vendor/three.module.js';
+import { assetBudget, litMaterial } from './materials.js';
 import { marbleTexture, slateTexture, softDiscTexture } from './textures.js';
 
 export const LAYER_ENV = 0;
@@ -63,7 +64,7 @@ export class BoardView {
   _buildStatic() {
     const t = this.theme;
     // plinth: carved stone slab with a stepped edge
-    const slabMat = new THREE.MeshStandardMaterial({ map: marbleTexture(numToHex(t.frame), '#6a5a44', 3), roughness: 0.7, metalness: 0.05 });
+    const slabMat = litMaterial({ map: marbleTexture(numToHex(t.frame), '#6a5a44', 3), roughness: 0.7, metalness: 0.05 });
     this.slab = new THREE.Mesh(new THREE.BoxGeometry(1, 0.55, 1), slabMat);
     this.slab.position.y = -0.3;
     this.slab.receiveShadow = true;
@@ -187,8 +188,8 @@ export class BoardView {
       this.group.remove(this.cellsMeshLight, this.cellsMeshDark);
       this.cellsMeshLight.geometry.dispose();
     }
-    const lightMat = new THREE.MeshPhysicalMaterial({ map: marbleTexture(numToHex(t.stoneLight), '#b0a488', 17 + s), roughness: 0.55 });
-    const darkMat = new THREE.MeshPhysicalMaterial({ map: slateTexture(numToHex(t.stoneDark), 23 + s), roughness: 0.6, color: new THREE.Color(0x9aa0b0) });
+    const lightMat = litMaterial({ map: marbleTexture(numToHex(t.stoneLight), '#b0a488', 17 + s), roughness: 0.55 }, true);
+    const darkMat = litMaterial({ map: slateTexture(numToHex(t.stoneDark), 23 + s), roughness: 0.6, color: new THREE.Color(0x9aa0b0) }, true);
     lightMat.userData.polish = { clearcoat: 0.3, clearcoatRoughness: 0.4, bump: 0.8, env: 0.22 };
     darkMat.userData.polish = { clearcoat: 0.12, clearcoatRoughness: 0.5, bump: 1.4, env: 0.12 };
     this.cellMats = [lightMat, darkMat];
@@ -228,10 +229,10 @@ export class BoardView {
         const tint = MATERIAL_TINTS[this.cosmetics?.material];
         if (tint) spec.color = tint;
       }
-      const mat = new THREE.MeshPhysicalMaterial({
+      const mat = litMaterial({
         color: spec.color, roughness: spec.rough, metalness: 0.08,
         map: color === 'onyx' ? slateTexture(numToHex(spec.color), 41) : marbleTexture(numToHex(spec.color), '#00000022', 43),
-      });
+      }, true);
       // polished turned stone: a lacquer-like clearcoat over the matte body
       mat.userData.polish = { clearcoat: 0.7, clearcoatRoughness: 0.2, bump: 0.5, env: color === 'onyx' ? 0.2 : 0.35 };
       const im = new THREE.InstancedMesh(bodyGeo, mat, maxForColor);
@@ -242,7 +243,7 @@ export class BoardView {
       im.raycast = () => {}; // picking goes through the cell plane
       this.group.add(im);
       this.pieceMeshes.set(color, im);
-      const crownMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.3, metalness: 0.75, emissive: 0x332200 });
+      const crownMat = litMaterial({ color: 0xd4af37, roughness: 0.3, metalness: 0.75, emissive: 0x332200 });
       crownMat.userData.polish = { env: 0.9 };
       const cm = new THREE.InstancedMesh(crownGeo, crownMat, maxForColor);
       cm.castShadow = true;
@@ -554,7 +555,7 @@ function pieceBodyGeometry() {
     [0.30, 0.16], [0.28, 0.20], [0.33, 0.24], [0.30, 0.28], [0.20, 0.30], [0.001, 0.31],
   ];
   for (const [x, y] of profile) pts.push(new THREE.Vector2(x, y));
-  const geo = new THREE.LatheGeometry(pts, 40);
+  const geo = new THREE.LatheGeometry(pts, assetBudget().pieceSegs || 40); // LOD per preset
   geo.computeVertexNormals();
   return geo;
 }
@@ -565,7 +566,7 @@ function crownGeometry() {
     [0.001, 0], [0.22, 0], [0.26, 0.03], [0.24, 0.08], [0.16, 0.10], [0.20, 0.16], [0.10, 0.20], [0.001, 0.22],
   ];
   for (const [x, y] of profile) pts.push(new THREE.Vector2(x, y));
-  return new THREE.LatheGeometry(pts, 28);
+  return new THREE.LatheGeometry(pts, assetBudget().crownSegs || 28);
 }
 
 function numToHex(n) {

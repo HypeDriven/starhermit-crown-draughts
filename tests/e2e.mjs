@@ -167,7 +167,7 @@ async function graphicsFlow(tag) {
   await page.select('#gfx-preset', 'low');
   await new Promise((r) => setTimeout(r, 300));
   const low = await page.evaluate(() => ({ body: document.body.dataset.gfxPreset, canvas: document.querySelector('.scene-canvas')?.dataset.gfxPreset, sum: document.getElementById('gfx-summary').textContent }));
-  check(`${tag}: Low preset applies`, low.body === 'low' && low.canvas === 'low' && /no shadows/.test(low.sum), JSON.stringify(low));
+  check(`${tag}: Low preset applies`, low.body === 'low' && low.canvas === 'low' && /no shadows/.test(low.sum) && / · Level 0 · /.test(low.sum), JSON.stringify(low));
   await page.select('#gfx-preset', 'high');
   await new Promise((r) => setTimeout(r, 400));
   const high = await page.evaluate(() => ({ body: document.body.dataset.gfxPreset, sum: document.getElementById('gfx-summary').textContent, post: globalThis.__crownDraughts.renderer.graphicsInfo().postActive }));

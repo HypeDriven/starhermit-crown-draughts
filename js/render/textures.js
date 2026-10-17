@@ -3,6 +3,10 @@
 
 import * as THREE from '../../vendor/three.module.js';
 import { createRng } from '../rules/rng.js';
+import { assetBudget } from './materials.js';
+
+// Procedural texture size per graphics preset (budget.texture: 128 / 256 / 256 / 512).
+const texSize = () => assetBudget().texture || 256;
 
 function canvasTex(size, draw, { repeat = 1, srgb = true } = {}) {
   const c = document.createElement('canvas');
@@ -20,7 +24,7 @@ function canvasTex(size, draw, { repeat = 1, srgb = true } = {}) {
 /** Layered value-noise marble veining. */
 export function marbleTexture(base = '#d9cdb4', vein = '#b8a888', seed = 7) {
   const rng = createRng(seed);
-  return canvasTex(256, (ctx, s) => {
+  return canvasTex(texSize(), (ctx, s) => {
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, s, s);
     const img = ctx.getImageData(0, 0, s, s);
@@ -31,9 +35,10 @@ export function marbleTexture(base = '#d9cdb4', vein = '#b8a888', seed = 7) {
     for (let y = 0; y < s; y++) {
       for (let x = 0; x < s; x++) {
         const i = (y * s + x) * 4;
-        const n = fbm((x + ox) / 48, (y + oy) / 48, seed);
+        const u = x * 256 / s, v = y * 256 / s; // same pattern at every texture size
+        const n = fbm((u + ox) / 48, (v + oy) / 48, seed);
         const veinAmt = Math.pow(Math.abs(Math.sin((x / s) * 6 + n * 5)), 18) * 0.5;
-        const grain = (fbm((x + oy) / 9, (y + ox) / 11, seed + 3) - 0.5) * 0.12;
+        const grain = (fbm((u + oy) / 9, (v + ox) / 11, seed + 3) - 0.5) * 0.12;
         const m = Math.min(1, Math.max(0, veinAmt + grain));
         d[i] = br + (vr - br) * m;
         d[i + 1] = bg + (vg - bg) * m;
@@ -46,16 +51,17 @@ export function marbleTexture(base = '#d9cdb4', vein = '#b8a888', seed = 7) {
 
 export function slateTexture(base = '#4a4f58', seed = 11) {
   const rng = createRng(seed);
-  return canvasTex(256, (ctx, s) => {
+  return canvasTex(texSize(), (ctx, s) => {
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, s, s);
     const img = ctx.getImageData(0, 0, s, s);
     const d = img.data;
     const [br, bg, bb] = hexToRgb(base);
+    const k = 256 / s;
     for (let y = 0; y < s; y++) {
       for (let x = 0; x < s; x++) {
         const i = (y * s + x) * 4;
-        const n = (fbm(x / 34, y / 34, seed) - 0.5) * 0.35 + (rng.next() - 0.5) * 0.05;
+        const n = (fbm(x * k / 34, y * k / 34, seed) - 0.5) * 0.35 + (rng.next() - 0.5) * 0.05;
         d[i] = br * (1 + n);
         d[i + 1] = bg * (1 + n);
         d[i + 2] = bb * (1 + n);
@@ -66,12 +72,13 @@ export function slateTexture(base = '#4a4f58', seed = 11) {
 }
 
 export function grassTexture(base = '#5d7a44', seed = 21) {
-  return canvasTex(256, (ctx, s) => {
+  return canvasTex(texSize(), (ctx, s) => {
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, s, s);
     const [br, bg, bb] = hexToRgb(base);
     const rng = createRng(seed);
-    for (let i = 0; i < 9000; i++) {
+    const blades = Math.round(9000 * (s / 256) ** 2);
+    for (let i = 0; i < blades; i++) {
       const x = rng.next() * s;
       const y = rng.next() * s;
       const v = (rng.next() - 0.5) * 0.35;
@@ -82,15 +89,16 @@ export function grassTexture(base = '#5d7a44', seed = 21) {
 }
 
 export function hedgeTexture(base = '#3f6032', seed = 31) {
-  return canvasTex(128, (ctx, s) => {
+  return canvasTex(texSize() / 2, (ctx, s) => {
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, s, s);
     const [br, bg, bb] = hexToRgb(base);
     const rng = createRng(seed);
-    for (let i = 0; i < 2600; i++) {
+    const k = s / 128;
+    for (let i = 0; i < Math.round(2600 * k * k); i++) {
       const x = rng.next() * s;
       const y = rng.next() * s;
-      const r = 1 + rng.next() * 2.6;
+      const r = (1 + rng.next() * 2.6) * k;
       const v = (rng.next() - 0.4) * 0.5;
       ctx.fillStyle = `rgba(${Math.round(br * (1 + v))},${Math.round(bg * (1 + v))},${Math.round(bb * (1 + v))},0.9)`;
       ctx.beginPath();

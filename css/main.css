@@ -160,7 +160,6 @@ button { font-family: inherit; }
 .setup-form {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 1.2rem 1.4rem; max-width: 560px; margin: 0 auto;
-  backdrop-filter: blur(6px);
 }
 .setup-note { font-size: 0.85rem; color: var(--ink-dim); }
 .setup-note.warn { color: var(--warn); }
@@ -251,7 +250,7 @@ button { font-family: inherit; }
 #rail-right { right: calc(10px + var(--sar)); width: 230px; }
 .rail-card {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 0.7rem 0.85rem; backdrop-filter: blur(5px);
+  padding: 0.7rem 0.85rem;
 }
 .rail-card h3 { font-size: 0.95rem; color: var(--accent); margin-bottom: 0.4rem; }
 .objective-fact { font-size: 0.82rem; color: var(--ink-dim); margin: 0.15rem 0; }
@@ -330,7 +329,7 @@ button { font-family: inherit; }
 /* results */
 .results {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 1.4rem; max-width: 520px; margin: 0 auto; backdrop-filter: blur(6px);
+  padding: 1.4rem; max-width: 520px; margin: 0 auto;
 }
 .result-banner {
   display: block; width: 100%; height: auto; aspect-ratio: 896 / 384; object-fit: cover;
@@ -542,3 +541,8 @@ body.reduced-motion .boot-bar { animation: none; }
 .platform-row .platform-name { margin: 0; flex-basis: 100%; text-align: center; }
 .invite-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; flex-wrap: wrap; }
 .invite-row > span { min-width: 0; overflow-wrap: anywhere; }
+
+/* Frosted glass over the live 3D view only where the graphics budget allows it (High/Ultra): a backdrop
+   blur is re-composited every frame the scene moves, which cost more than the whole Low scene. */
+body.gfx-hud-blur .setup-form, body.gfx-hud-blur .results { backdrop-filter: blur(6px); }
+body.gfx-hud-blur .rail-card { backdrop-filter: blur(5px); }

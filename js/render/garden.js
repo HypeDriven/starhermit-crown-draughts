@@ -6,6 +6,7 @@ import * as THREE from '../../vendor/three.module.js';
 import { grassTexture, hedgeTexture, marbleTexture, softDiscTexture } from './textures.js';
 import { createRng } from '../rules/rng.js';
 import { LAYER_ENV } from './board.js';
+import { assetBudget, litMaterial } from './materials.js';
 
 function hex(n) { return `#${(n & 0xffffff).toString(16).padStart(6, '0')}`; }
 
@@ -32,7 +33,7 @@ export class Garden {
     // ground lawn
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(34, 48),
-      new THREE.MeshStandardMaterial({ map: grassTexture(hex(t.ground), seed), roughness: 0.95 }),
+      litMaterial({ map: grassTexture(hex(t.ground), seed), roughness: 0.95 }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.62;
@@ -43,7 +44,7 @@ export class Garden {
     // stone terrace under the board
     const terrace = new THREE.Mesh(
       new THREE.CylinderGeometry(9.5, 10.2, 0.25, 40),
-      new THREE.MeshStandardMaterial({ map: marbleTexture(hex(t.path), '#8a7a62', seed + 5), roughness: 0.8 }),
+      litMaterial({ map: marbleTexture(hex(t.path), '#8a7a62', seed + 5), roughness: 0.8 }),
     );
     terrace.position.y = -0.55;
     terrace.receiveShadow = true;
@@ -51,7 +52,7 @@ export class Garden {
     g.add(terrace);
 
     // hedge ring
-    const hedgeMat = new THREE.MeshStandardMaterial({ map: hedgeTexture(hex(t.hedge), seed + 9), roughness: 0.9 });
+    const hedgeMat = litMaterial({ map: hedgeTexture(hex(t.hedge), seed + 9), roughness: 0.9 });
     const hedgeGeo = new THREE.BoxGeometry(3.4, 1.5, 1.1);
     const hedges = new THREE.InstancedMesh(hedgeGeo, hedgeMat, 26);
     const m4 = new THREE.Matrix4();
@@ -78,8 +79,8 @@ export class Garden {
 
     // trees: trunk + layered foliage blobs
     if (t.env.trees) {
-      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 0.9 });
-      const leafMat = new THREE.MeshStandardMaterial({ color: shade(t.hedge, 1.15), roughness: 0.85 });
+      const trunkMat = litMaterial({ color: 0x5a4632, roughness: 0.9 });
+      const leafMat = litMaterial({ color: shade(t.hedge, 1.15), roughness: 0.85 });
       const trunkGeo = new THREE.CylinderGeometry(0.14, 0.22, 1.8, 8);
       const leafGeo = new THREE.IcosahedronGeometry(1.15, 1);
       const treeSpots = [[-13, -9], [13, -10], [-15, 4], [15, 6], [-8, -14], [9, -15]];
@@ -106,7 +107,7 @@ export class Garden {
 
     // fountain behind the board
     if (t.env.fountain) {
-      const stoneMat = new THREE.MeshStandardMaterial({ map: marbleTexture(hex(t.frame), '#77664e', seed + 13), roughness: 0.7 });
+      const stoneMat = litMaterial({ map: marbleTexture(hex(t.frame), '#77664e', seed + 13), roughness: 0.7 });
       const basin = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.9, 0.6, 24), stoneMat);
       basin.position.set(0, -0.3, -11.5);
       basin.castShadow = true;
@@ -120,7 +121,7 @@ export class Garden {
       g.add(pillar);
       this.water = new THREE.Mesh(
         new THREE.CircleGeometry(1.55, 32),
-        new THREE.MeshPhysicalMaterial({ color: t.water, roughness: 0.08, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, opacity: 0.9 }),
+        litMaterial({ color: t.water, roughness: 0.08, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, opacity: 0.9 }, true),
       );
       this.water.rotation.x = -Math.PI / 2;
       this.water.position.set(0, 0.02, -11.5);
@@ -134,7 +135,7 @@ export class Garden {
     const wantTorches = t.env.torches;
     if (wantLanterns || wantTorches) {
       const postGeo = new THREE.CylinderGeometry(0.06, 0.09, 1.6, 8);
-      const postMat = new THREE.MeshStandardMaterial({ color: 0x3a3430, roughness: 0.8 });
+      const postMat = litMaterial({ color: 0x3a3430, roughness: 0.8 });
       const glowColor = wantTorches ? 0xff9a4a : 0xffd9a0;
       for (const [x, z] of [[-7.5, 7.5], [7.5, 7.5], [-7.5, -7.5], [7.5, -7.5]]) {
         const post = new THREE.Mesh(postGeo, postMat);
@@ -144,7 +145,7 @@ export class Garden {
         g.add(post);
         const glow = new THREE.Mesh(
           new THREE.SphereGeometry(0.18, 10, 8),
-          new THREE.MeshStandardMaterial({ color: glowColor, emissive: glowColor, emissiveIntensity: 5 }),
+          litMaterial({ color: glowColor, emissive: glowColor, emissiveIntensity: 5 }),
         );
         glow.position.set(x, 1.05, z);
         glow.layers.set(LAYER_ENV);
@@ -155,8 +156,8 @@ export class Garden {
 
     // flowers: instanced small crosses of color
     const flowerGeo = new THREE.IcosahedronGeometry(0.09, 0);
-    const flowerMatA = new THREE.MeshStandardMaterial({ color: t.flowerA, roughness: 0.7 });
-    const flowerMatB = new THREE.MeshStandardMaterial({ color: t.flowerB, roughness: 0.7 });
+    const flowerMatA = litMaterial({ color: t.flowerA, roughness: 0.7 });
+    const flowerMatB = litMaterial({ color: t.flowerB, roughness: 0.7 });
     for (const [mat, count] of [[flowerMatA, 60], [flowerMatB, 60]]) {
       const inst = new THREE.InstancedMesh(flowerGeo, mat, count);
       for (let i = 0; i < count; i++) {
@@ -178,9 +179,11 @@ export class Garden {
     // and a second scatter of blossoms; toggled by the `detail` graphics tier
     this.detailGroup = new THREE.Group();
     const tuftGeo = new THREE.ConeGeometry(0.07, 0.34, 5);
-    const tuftMat = new THREE.MeshStandardMaterial({ color: shade(t.ground, 1.12), roughness: 0.9 });
-    const tufts = new THREE.InstancedMesh(tuftGeo, tuftMat, 420);
-    for (let i = 0; i < 420; i++) {
+    const tuftMat = litMaterial({ color: shade(t.ground, 1.12), roughness: 0.9 });
+    const tuftN = Math.max(1, assetBudget().tufts); // per-preset budget (0 on Low)
+    const tufts = new THREE.InstancedMesh(tuftGeo, tuftMat, tuftN);
+    tufts.count = assetBudget().tufts;
+    for (let i = 0; i < tuftN; i++) {
       const a = rng.next() * Math.PI * 2;
       const r = 10.4 + Math.pow(rng.next(), 1.6) * 13;
       eul.set((rng.next() - 0.5) * 0.5, rng.next() * 6, (rng.next() - 0.5) * 0.5);
@@ -193,7 +196,7 @@ export class Garden {
     tufts.raycast = () => {};
     this.detailGroup.add(tufts);
     const kerbGeo = new THREE.BoxGeometry(0.9, 0.16, 0.42);
-    const kerbMat = new THREE.MeshStandardMaterial({ map: marbleTexture(hex(t.path), '#6f624e', seed + 29), roughness: 0.85 });
+    const kerbMat = litMaterial({ map: marbleTexture(hex(t.path), '#6f624e', seed + 29), roughness: 0.85 });
     const kerbN = 44;
     const kerbs = new THREE.InstancedMesh(kerbGeo, kerbMat, kerbN);
     for (let i = 0; i < kerbN; i++) {
@@ -207,7 +210,7 @@ export class Garden {
     kerbs.layers.set(LAYER_ENV);
     kerbs.raycast = () => {};
     this.detailGroup.add(kerbs);
-    const blossom = new THREE.InstancedMesh(flowerGeo, new THREE.MeshStandardMaterial({ color: 0xf4efe0, roughness: 0.7 }), 70);
+    const blossom = new THREE.InstancedMesh(flowerGeo, litMaterial({ color: 0xf4efe0, roughness: 0.7 }), 70);
     for (let i = 0; i < 70; i++) {
       const a = rng.next() * Math.PI * 2;
       const r = 10.8 + rng.next() * 10;
@@ -222,7 +225,7 @@ export class Garden {
     // ambient drifting particles (petals / snow / embers)
     this.ambient = null;
     const ambColor = t.env.snow ? 0xffffff : t.env.torches ? 0xffb060 : 0xe8a0b0;
-    const ambCount = t.env.snow ? 260 : 140;
+    const ambCount = Math.max(1, Math.round(assetBudget().ambient * (t.env.snow ? 260 / 140 : 1))); // per-preset budget
     const pos = new Float32Array(ambCount * 3);
     this.ambVel = new Float32Array(ambCount * 3);
     for (let i = 0; i < ambCount; i++) {
