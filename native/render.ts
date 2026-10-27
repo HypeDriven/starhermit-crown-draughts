@@ -69,7 +69,7 @@ function tex(name: string, repeat = 1): Texture {
   const key = `${name}:${repeat}`;
   const hit = texCache.get(key);
   if (hit) return hit;
-  const t = loader.load(`assets/tex/${name}.png`, undefined, (e) => console.warn(`texture ${name}: ${String(e)}`));
+  const t = loader.load(`assets/tex/${name}.png`, undefined, (e: unknown) => console.warn(`texture ${name}: ${String(e)}`));
   t.wrapS = t.wrapT = RepeatWrapping;
   t.repeat.set(repeat, repeat);
   t.colorSpace = SRGBColorSpace;
