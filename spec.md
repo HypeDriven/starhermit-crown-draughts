@@ -2,9 +2,9 @@
 
 **Pitch:** carved-stone draughts in a royal garden — mandatory captures, chain jumps and crowning on an 8×8 duel court, a 10×10 grand court, or a four-house 10×10 melee, against a deterministic alpha-beta AI, a friend on the same device, or a hosted table.
 **Genre:** turn-based abstract board strategy. **Players:** 1 (vs AI), 2–4 pass-and-play, 2–4 hosted. **Session:** 2–5 min per lesson, 3–10 min per journey stage, 5–25 min per full game.
-**Platforms:** a StarHermit engine script game (engine 1.16.2, host API 1.18): played natively by the StarHermit client and in desktop and mobile browsers (portrait and landscape) by the engine's web runtime; keyboard, mouse, touch and gamepad.
+**Platforms:** a StarHermit engine script game (engine 1.16.3, host API 1.18): played natively by the StarHermit client and in desktop and mobile browsers (portrait and landscape) by the engine's web runtime; keyboard, mouse, touch and gamepad.
 **Rendering:** the royal garden and the board on `starhermit:scene` (three.js-like; procedural geometry, baked grey factor maps for the stone, grass and hedge, no external 3D assets); menus, HUD and a fully playable semantic board on `starhermit:ui`.
-**Version:** `starhermit.txt` declares `version=1.0.0`, `content-version=1`, `launch=index.html` (the engine's web loader), `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.16.2`, `engine.minor=18`, `engine.capabilities=platform,storage,clipboard`, `server=server.js`, `cover=cover.jpg`.
+**Version:** `starhermit.txt` declares `version=1.0.0`, `content-version=1`, `launch=index.html` (the engine's web loader), `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.16.3`, `engine.minor=18`, `engine.capabilities=platform,storage,clipboard`, `server=server.js`, `cover=cover.jpg`.
 
 | Path | Responsibility |
 |---|---|
