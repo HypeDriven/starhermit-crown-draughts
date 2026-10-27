@@ -15,7 +15,7 @@
     "assets/ui-style.json": {"sha256": "b003aa539d97456da8352709d702ccf77d3174c3c67573fd77ea81206fc1e316", "size": 16889},
     "cover.jpg": {"sha256": "2a689a89429ab4d484ef21c048be395833d7126ce1b32f107363b297a45ccaad", "size": 256966},
     "icon.png": {"sha256": "ea506186b6dfdd293b25d21e55c3af03d2276fbae78570287a5ff4d4cf94e2d5", "size": 7297},
-    "index.html": {"sha256": "ed16c68449a0cd371e391161a0ddd6a3b392962f7383ebb64cc41f97968d4885", "size": 1764},
+    "index.html": {"sha256": "a6be6ddd56048d7cf7394b22235cbaf3e5aff57fc8939799a914590a479d5972", "size": 1764},
     "js/content/achievements.js": {"sha256": "f5396ca16eefb56c2ab2a4fad3d1beb1aa34676dcdf8608325c9c0ebf3cce660", "size": 2215},
     "js/content/baked.js": {"sha256": "41bac4a05a65e861c37dad51782048570e8002a4c90bbcf582baa117f0631e60", "size": 31674},
     "js/content/challenges.js": {"sha256": "3cecc2080dc9c91331ade4cbf3fadb4616243fdd6f96fee457fec4e25b8210fd", "size": 4394},
@@ -44,13 +44,13 @@
     "native/app.ts": {"sha256": "e2300a3fe974f67e7a6d23ce4a9b2e2dc7807d4acf4c06f8bb05c13431bf4905", "size": 31832},
     "native/audio.ts": {"sha256": "0f6a6dbe94ad05621d2e363f78447c4ab7a4eef3ac1a9dab97d30319ed694ab8", "size": 7661},
     "native/data.ts": {"sha256": "0c2646feae8d008a584a2f88a2e01f3bbd1c6f07bfcd7904b00481e857fc5371", "size": 878},
-    "native/game.ts": {"sha256": "708f067d51e18132a660497e733236d6609b906751c6e91bcc6ce4a2004e4405", "size": 15111},
+    "native/game.ts": {"sha256": "686dc00d0e19a7b267513356fdd1c88619763e04f28391db6aecb265b71b8aa2", "size": 15603},
     "native/i18n.ts": {"sha256": "c3fa69fc4db306c8e2e3593354a7527d38ee8ca098c1133f1a7a0c3c7808c650", "size": 1258},
     "native/main.ts": {"sha256": "8e2a97571432c46fbfd241c7409a00bbc476aeea2b24323bb8ce8fda4857af19", "size": 6351},
     "native/platform.ts": {"sha256": "08af94b7c1b822c013fea0784dd10d3e44ce3080cd7bab1ce49412515b7c30c1", "size": 16623},
     "native/quality.ts": {"sha256": "77d9f96492ed7d52b353e5ae1b2be946b76ae930020dbcbbe8ef05e6176a58da", "size": 3648},
     "native/render.ts": {"sha256": "7bc4a7a7460d0f85259a8b2d6a0e175a02b9cb256b3b4b9fc93b67997c73c20c", "size": 50586},
-    "native/screens.ts": {"sha256": "0339b9c68a74ad5de310143afeb556f4954fe9f34b1589c06fcde1834ad5522b", "size": 58001},
+    "native/screens.ts": {"sha256": "4662accb13d3e9b081ee73faf3caa192b98dba81fd3a7e41ab7f24971bbc9cf1", "size": 59085},
     "native/style.ts": {"sha256": "258ebcaa012d645815e59b4b038e04603e4597b2300525b66cda3056c6765c13", "size": 3761},
     "score-script.js": {"sha256": "2dbfcf68f98b1c687e6c9539fc400ce5cb22a6bf598881342b55383d22db8948", "size": 2486},
     "sfx/amb-dusk-conservatory.opus": {"sha256": "7fa878bf3ec040d25b076d2bb1a746b449f56af4290a9a370cee915da03afa86", "size": 164459},
@@ -103,7 +103,7 @@
     "sfx/ui-toggle.opus": {"sha256": "8191d447bf21b03f164794ec1a2027d1ee008e73cfd02901d99128a86987c54f", "size": 11545},
     "sfx/undo.opus": {"sha256": "f8dc6f41babcf20fea052f70add901398582ef4b9eb4869c9a80d95b36899909", "size": 11812},
     "sfx/win.opus": {"sha256": "d56587d3ecf3be9d22efc14e6b58c4233efc9067d4704728b919e5ecded404a8", "size": 63771},
-    "starhermit.txt": {"sha256": "62e273cb2d503acf6e9698a1729a1c8275d5a39c48c314117a7e130268ee6336", "size": 1985}
+    "starhermit.txt": {"sha256": "9205400a350a4966d418c38e0c17b7916dff42a931cf84c4df2e218e909b6a94", "size": 1985}
   },
   "excluded": ["coverart.png", "knownissues.md", "package.json", "server.js", "spec.md", "tests/", "tools/", "tsconfig.json"],
   "format": 1
