@@ -160,7 +160,8 @@ function titleScreen(): void {
   screen("title", 420, (w) => {
     ui.column("title-block", () => {
       ui.column("emblem", () => { /* the emblem image is the box's background */ }, { width: 112, height: 112, style: "emblem-img" });
-      heading(T("Crown Draughts"), "game-title");
+      // The browser build's clamp(2.4rem, 7vw, 4.4rem).
+      ui.style("game-title", { text: { size: Math.max(38.4, Math.min(70.4, VW * 0.07)) } }).heading(T("Crown Draughts"));
       para(T("A carved stone board in a royal garden."), w, "tagline");
     }, { align: "center", spacing: 8, width: w });
     ui.id("title-actions").column(T("Main menu"), () => {
@@ -579,7 +580,9 @@ function hudTopbar(): void {
           const text = T(mine ? "{name} to move — you" : "{name} to move", { name: T(pl.name) });
           ui.row("turn", () => {
             ui.widget("turn-color", { role: "none", size: { width: 10, height: 18 }, draw: (r) => draw.roundRect(r.x, r.y, r.width, r.height, 3, COLOR_HEX[pl.color] || "#e8ddc4") });
-            ui.style(phone() ? { text: { size: 13 } } : null).label(text);
+            // Phones: the banner wraps beside the title and the Pause button.
+            if (phone()) ui.style("text", { text: { size: 13, weight: "700" } }).paragraph(text, Math.max(90, VW - 250));
+            else ui.label(text);
           }, { style: "turn-banner", spacing: 8, align: "center" });
         }
         if (app.clock && !phone()) clocks();
@@ -768,6 +771,12 @@ function gameHud(): void {
   const left = !!app.settings.accessibility.leftHanded;
   hudTopbar();
   const topY = 64;
+  // The semantic board first: the rails, drawers and tray draw (and take the pointer) over it.
+  if (app.boardShown) {
+    const bottom = isCompact ? TRAY_H() + 12 : 12;
+    // Phones keep the 3D board in view above the (smaller) semantic board.
+    semanticBoard(game, phone() ? Math.min(VW * 0.62, VH * 0.3) : Math.min(VW * 0.92, VH * 0.46), bottom);
+  }
   if (!isCompact) {
     const railH = VH - topY - 16;
     const logH = railH - 240 - (app.coach ? 170 : 0);
@@ -781,13 +790,16 @@ function gameHud(): void {
     }
     const drawerW = Math.min(320, VW * 0.84);
     const drawerBottom = TRAY_H() + 4;
-    if (app.drawer === "left") ui.place("drawer-l", { anchor: left ? "bottom-end" : "bottom-start", x: 10, y: drawerBottom }, () => leftRail(drawerW, Math.min(160, VH * 0.2), false));
-    if (app.drawer === "right") ui.place("drawer-r", { anchor: left ? "bottom-start" : "bottom-end", x: 10, y: drawerBottom }, () => rightRail(drawerW, Math.min(120, VH * 0.18)));
+    // A drawer scrolls when it is taller than the room between the top bar and the tray.
+    const room = VH - topY - drawerBottom - 8;
+    const drawer = (id: string, build: () => void): void => {
+      const h = heights.get(id) ?? 0;
+      if (h > room) ui.scrollArea(`${id}-scroll`, { width: drawerW + 12, height: room }, () => { const r = ui.column(id, build, { spacing: 0 }); heights.set(id, r.height / SCALE); });
+      else { const r = ui.column(id, build, { spacing: 0 }); heights.set(id, r.height / SCALE); }
+    };
+    if (app.drawer === "left") ui.place("drawer-l", { anchor: left ? "bottom-end" : "bottom-start", x: 10, y: drawerBottom }, () => drawer("drawer-l-c", () => leftRail(drawerW, Math.min(160, VH * 0.2), false)));
+    if (app.drawer === "right") ui.place("drawer-r", { anchor: left ? "bottom-start" : "bottom-end", x: 10, y: drawerBottom }, () => drawer("drawer-r-c", () => rightRail(drawerW, Math.min(120, VH * 0.18))));
     tray();
-  }
-  if (app.boardShown) {
-    const bottom = isCompact ? TRAY_H() + 12 : 12;
-    semanticBoard(game, Math.min(VW * 0.92, VH * 0.46), bottom);
   }
   if (app.countdown && app.countdown.i >= 0 && app.countdown.i < app.countdown.steps.length) {
     ui.place("countdown", "center", () => { ui.style("countdown").label(app.countdown!.steps[app.countdown!.i]!); });

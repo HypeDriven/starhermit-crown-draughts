@@ -304,15 +304,20 @@ export class GameController {
     };
   }
 
-  /** Moves the semantic board's cursor to the next playable square that way. */
+  /** Moves the semantic board's cursor to the next playable square that way:
+   * up and down to the neighbouring row (its square in the same column, else
+   * the one beside it), left and right to the next playable square of the row.
+   * (The browser build stepped straight down a column, which skipped every
+   * other row: half the squares were out of the keyboard's reach.) */
   moveCursor(dr: number, dc: number): void {
     const size = this.size;
-    let { r, c } = this.cursor;
-    for (let i = 0; i < size; i++) {
-      r += dr; c += dc;
-      if (r < 0 || r >= size || c < 0 || c >= size) break;
-      if (isPlayable(size, r, c)) { this.cursor = { r, c }; break; }
+    const { r, c } = this.cursor;
+    const ok = (rr: number, cc: number): boolean => rr >= 0 && rr < size && cc >= 0 && cc < size && isPlayable(size, rr, cc);
+    if (dr) {
+      for (const cc of [c, c + 1, c - 1]) if (ok(r + dr, cc)) { this.cursor = { r: r + dr, c: cc }; return; }
+      return;
     }
+    for (let cc = c + dc; cc >= 0 && cc < size; cc += dc) if (ok(r, cc)) { this.cursor = { r, c: cc }; return; }
   }
 
   // --- keys and pads -------------------------------------------------------------------
