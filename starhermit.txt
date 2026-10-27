@@ -1,12 +1,26 @@
 name=Crown Draughts
 description=Capture rival pieces, chain jumps, and crown kings in draughts matches across several board formats.
-launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
 server=score-script.js
 version=1.0.0
 ruleset-engine=js/rules/engine.js
 content-version=1
 cover=cover.jpg
+
+# StarHermit engine script game: one package, played natively by the
+# StarHermit client and in browsers by the engine's web runtime. Browsers open
+# launch=index.html, the loader `npm run package` writes (it pins the engine
+# on wiki.starhermit.com; never edit it). Re-run `npm run package` after every
+# change and commit index.html + starhermit-files.json.
+launch=index.html
+engine.api=1
+engine.entry=native/main.ts
+engine.version=1.16.1
+engine.minor=18
+engine.capabilities=platform,storage,clipboard
+
+# Keyboard controls (players rebind keys and pads in the runtime's Options).
+# F1 is the runtime's (Options), so Help is on the slash / question-mark key.
 control.confirm=Enter+Space | Confirm / select
 control.cancel=Escape | Cancel / back
 control.up=ArrowUp+KeyW | Move cursor up
@@ -19,5 +33,21 @@ control.hint=KeyH | Hint (where allowed)
 control.camera=KeyC | Reset / cycle camera
 control.mute=KeyM | Mute
 control.board=KeyB | Toggle HTML board
-control.help=F1 | Help
+control.help=Slash | Help
 control.skip=KeyF | Skip animation
+engine.group.confirm=Board
+engine.group.pause=Round
+
+# Gamepad defaults for the same actions.
+engine.gamepad.confirm=South
+engine.gamepad.cancel=East
+engine.gamepad.up=DpadUp+LeftStickUp
+engine.gamepad.down=DpadDown+LeftStickDown
+engine.gamepad.left=DpadLeft+LeftStickLeft
+engine.gamepad.right=DpadRight+LeftStickRight
+engine.gamepad.pause=Start
+engine.gamepad.undo=West
+engine.gamepad.hint=North
+engine.gamepad.camera=LeftStickPress
+engine.gamepad.board=Select
+engine.gamepad.skip=RightShoulder

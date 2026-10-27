@@ -1,81 +1,18 @@
-<!DOCTYPE html>
+<!doctype html>
+<!-- StarHermit web loader, written by starhermit package --web: it pins the engine by hash and holds no script of its own; package again rather than edit it. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#2c3a28">
-<meta name="description" content="Crown Draughts — diagonal pieces, mandatory captures, chain jumps and crowning on a carved stone board in a royal garden.">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="icon.png">
 <title>Crown Draughts</title>
-<link rel="icon" type="image/png" href="favicon.png">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23414a37'/%3E%3Ccircle cx='16' cy='19' r='7' fill='%23e8ddc4'/%3E%3Cpath d='M10 12l3 3 3-4 3 4 3-3v6H10z' fill='%23d4af37'/%3E%3C/svg%3E">
-<script src="sh-language.js"></script>
-<script src="game-options.js" data-game="crown-draughts"></script>
-<script type="importmap">{ "imports": { "three": "./vendor/three.module.js", "three/addons/": "./vendor/three/addons/" } }</script>
-<link rel="stylesheet" href="css/main.css?v=2">
-<script src="ui-scale.js"></script>
-<script src="browser-guard.js"></script>
+<style>html,body{margin:0;height:100%;background:#000;color:#eee;font:16px/1.5 system-ui,sans-serif}canvas{display:block;width:100%;height:100%}.starhermit-message{position:fixed;inset:0;margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;background:#000}.starhermit-message[hidden]{display:none}.starhermit-late{animation:starhermit-late 0s 20s both}@keyframes starhermit-late{from{visibility:hidden}to{visibility:visible}}</style>
+<script type="module" src="https://wiki.starhermit.com/engine/1.16.1/starhermit.js" integrity="sha384-KBfxOD6Ky0t9Pdf/xZtMGFEwAoHKFnQ2SB8QZliELipcbZH9K5YQhwbmU8qjKXu9" crossorigin="anonymous"></script>
+<script type="application/json" id="starhermit-config">{"manifest":{"integrity":"sha384-pdzSgLs0KibnQR+GYZqP2LkpiAPClSwWQLTu3jnZmdctGnl1IdKhvpbZIOSe+++S","url":"https://wiki.starhermit.com/engine/1.16.1/manifest.json"}}</script>
 </head>
-<body data-theme="royal-garden" data-screen="boot">
-<noscript>
-  <div class="noscript-note">
-    <h1>Crown Draughts</h1>
-    <p>Crown Draughts is a JavaScript game. Please enable JavaScript to play.</p>
-  </div>
-</noscript>
-
-<div id="app">
-  <!-- 3D scene fills the game region; the semantic HTML layer sits over/beside it -->
-  <div id="scene-region" aria-hidden="true">
-    <div id="scene-container"></div>
-    <div id="webgl-fallback" hidden>
-      <p><strong data-i18n="3D view unavailable.">3D view unavailable.</strong> <span data-i18n="Your browser could not create a WebGL context. The full game remains playable on the HTML board below.">Your browser could not create a WebGL context. The full game remains playable on the HTML board below.</span></p>
-    </div>
-  </div>
-
-  <!-- In-game UI layer -->
-  <div id="game-ui" hidden>
-    <header id="topbar" class="hud-region"></header>
-    <aside id="rail-left" class="hud-region" aria-label="Objective and progress" data-i18n-aria="Objective and progress"></aside>
-    <aside id="rail-right" class="hud-region" aria-label="Actions and status" data-i18n-aria="Actions and status"></aside>
-    <div id="coach-dock" class="hud-region" aria-live="polite"></div>
-    <div id="tray-bottom" class="hud-region" aria-label="Quick actions" data-i18n-aria="Quick actions"></div>
-    <div id="dom-board-container" aria-label="HTML board" data-i18n-aria="HTML board"></div>
-  </div>
-
-  <!-- Menu screens -->
-  <div id="screens">
-    <section class="screen" data-screen="boot">
-      <div class="boot-panel">
-        <h1 class="game-title">Crown Draughts</h1>
-        <p class="tagline" data-i18n="Carved stone, quiet gardens, sharp tactics.">Carved stone, quiet gardens, sharp tactics.</p>
-        <div class="boot-bar" role="progressbar" aria-label="Loading" data-i18n-aria="Loading"></div>
-      </div>
-    </section>
-    <section class="screen" data-screen="title" hidden></section>
-    <section class="screen" data-screen="modes" hidden></section>
-    <section class="screen" data-screen="practice" hidden></section>
-    <section class="screen" data-screen="local" hidden></section>
-    <section class="screen" data-screen="journey" hidden></section>
-    <section class="screen" data-screen="stage-setup" hidden></section>
-    <section class="screen" data-screen="learn" hidden></section>
-    <section class="screen" data-screen="challenges" hidden></section>
-    <section class="screen" data-screen="challenge-setup" hidden></section>
-    <section class="screen" data-screen="daily" hidden></section>
-    <section class="screen" data-screen="lobby" hidden></section>
-    <section class="screen" data-screen="table-room" hidden></section>
-    <section class="screen" data-screen="results" hidden></section>
-  </div>
-
-  <div id="overlay-root"></div>
-
-  <!-- Toasts and live regions -->
-  <div id="toast-region" aria-live="polite" aria-atomic="false"></div>
-  <div id="live-region" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
-  <div id="alert-region" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>
-</div>
-
-<script src="gpu-level.js"></script>
-<script src="starhermit-sdk.js"></script>
-<script type="module" src="js/main.js"></script>
+<body>
+<canvas></canvas>
+<div id="starhermit-status" class="starhermit-message" role="status"><span>Loading Crown Draughts…</span><span class="starhermit-late">If the game has not started, this browser cannot run it or its engine (StarHermit 1.16.1) could not be loaded: reload the page, or open it in a current Chrome, Edge, Firefox or Safari.</span></div>
+<noscript><p class="starhermit-message">This game needs JavaScript.</p></noscript>
 </body>
 </html>

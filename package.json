@@ -1,14 +1,18 @@
 {
   "name": "crown-draughts",
   "version": "1.0.0",
-  "type": "module",
   "private": true,
-  "description": "Crown Draughts — carved-stone draughts in a royal garden. Deterministic rules engine, Three.js presentation, semantic HTML interface.",
+  "type": "module",
+  "description": "Crown Draughts — carved-stone draughts in a royal garden on the StarHermit engine. Deterministic rules engine, starhermit:scene presentation, starhermit:ui interface.",
   "scripts": {
-    "test": "node --test tests/engine.test.mjs tests/ai.test.mjs tests/content.test.mjs tests/session.test.mjs tests/server.test.mjs tests/gfx.test.mjs tests/platform.test.mjs tests/i18n.test.mjs",
-    "test:e2e": "node tests/e2e.mjs",
+    "test": "node --test tests/engine.test.mjs tests/ai.test.mjs tests/content.test.mjs tests/session.test.mjs tests/server.test.mjs tests/storage.test.mjs tests/hosted.test.mjs tests/i18n.test.mjs && node tests/native.mjs",
+    "test:rules": "node --test tests/engine.test.mjs tests/ai.test.mjs tests/content.test.mjs tests/session.test.mjs tests/server.test.mjs tests/storage.test.mjs tests/hosted.test.mjs tests/i18n.test.mjs",
+    "test:native": "node tests/native.mjs",
+    "test:browser": "node tools/browser-play.mjs",
+    "plays": "node tools/gen-play.mjs",
+    "package": "node tools/package-web.mjs",
+    "css": "node tools/css.mjs",
     "check": "node tools/check.mjs",
-    "bake": "node tools/bake-content.mjs",
-    "serve": "node server.js --dev"
+    "bake": "node tools/bake-content.mjs"
   }
 }
