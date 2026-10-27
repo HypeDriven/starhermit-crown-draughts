@@ -5,9 +5,11 @@
 // GUESTS send their existing action JSON ({type:'move'|...}) as binary frames
 // (guest→host), which the host validates through Session.submit and answers
 // with a fresh snapshot (host→everyone). Chat and lobby roster ride the same
-// channel. The host reports the result via POST /rooms/{id}/result; everyone
-// leaves via POST /rooms/{id}/leave. Undo/hints stay unavailable in hosted
-// play. This module keeps the exact client surface the UI already uses.
+// channel; the room's roster (its participants, by seat) comes from the
+// platform. Everyone leaves the room when done. Undo/hints stay unavailable
+// in hosted play. `platform` is native/platform.ts's roomsAdapter (the
+// runtime's realtime rooms); a guest's seat is the one the platform says
+// sent the frame, never one named in its payload.
 
 import { Emitter } from './session.js';
 import { Session } from './session.js';
@@ -35,6 +37,7 @@ export class HostedSessionClient extends Emitter {
     this._socket = null;
     this._session = null;          // host only: authoritative local session
     this._deadlineTimer = null;
+    this._seatById = new Map();    // participant id -> seat, from the room's roster
   }
 
   get isHost() { return this.seat === 0; }
@@ -100,7 +103,7 @@ export class HostedSessionClient extends Emitter {
   /** Guests have no local state to refresh; the socket stream is the truth. */
   async refresh() {
     if (this.isHost) this._broadcastLobby();
-    else if (this._guestName && this._socket) this._socket.send({ t: 'hello', name: this._guestName });
+    else if (this._guestName && this._socket) this._socket.send({ t: 'hello', name: this._guestName, seat: this.seat });
     return { ok: true };
   }
 
@@ -136,15 +139,15 @@ export class HostedSessionClient extends Emitter {
     if (this._socket) return;
     this._socket = this.platform.openRoomSocket(this.roomId, {
       onOpen: () => {
-        if (!this.isHost && this._guestName) this._socket.send({ t: 'hello', name: this._guestName });
+        if (!this.isHost && this._guestName) this._socket.send({ t: 'hello', name: this._guestName, seat: this.seat });
         if (this.isHost) {
           this._broadcastLobby();
           if (this._session) this._broadcastSnapshot(); // a reconnect catches guests up
         }
       },
-      onMessage: ({ control, msg }) => {
+      onMessage: ({ control, msg, from }) => {
         if (control) return this._onControl(control);
-        if (msg) this._onFrame(msg);
+        if (msg) this._onFrame(msg, from);
       },
       onClose: () => {
         for (const p of this.players) p.connected = false;
@@ -169,17 +172,23 @@ export class HostedSessionClient extends Emitter {
     // Server-side roster/presence pushes.
     if (control.type === 'roster' || control.type === 'participants') {
       const list = control.players || control.participants || [];
-      this.players = list.map((p, i) => ({
-        seat: typeof p.seat === 'number' ? p.seat : i,
-        name: p.name || p.displayName || `Seat ${i + 1}`,
-        connected: p.connected !== false,
-        rating: p.rating ?? '—',
-      }));
-      if (this.phase === 'lobby') this.emit('players', this.players);
+      if (control.ids) this._seatById = new Map(Object.entries(control.ids));
+      if (this.phase !== 'lobby') return;
+      const known = new Map(this.players.map((p) => [p.seat, p.name]));
+      if (this.isHost && this.hostName) known.set(this.seat, this.hostName);
+      this.players = list.map((p, i) => {
+        const seat = typeof p.seat === 'number' ? p.seat : i;
+        // A seat keeps the name its player announced (hello) over the account's.
+        return { seat, name: known.get(seat) || p.name || p.displayName || `Seat ${i + 1}`, connected: p.connected !== false, rating: p.rating ?? '—' };
+      });
+      if (this.isHost) this._broadcastLobby();
+      else this.emit('players', this.players);
     }
   }
 
-  _onFrame(msg) {
+  _onFrame(msg, from) {
+    // The platform names the sender (guest frames reach only the host).
+    if (from != null && this._seatById.has(from)) msg.seat = this._seatById.get(from);
     switch (msg.t) {
       case 'hello': // host only: a guest announced themselves in the lobby
         if (!this.isHost || this.phase !== 'lobby') return;
@@ -222,7 +231,8 @@ export class HostedSessionClient extends Emitter {
   }
 
   _upsertGuest(msg) {
-    const existing = this.players.find((p) => p.name === msg.name);
+    const existing = this.players.find((p) => (typeof msg.seat === 'number' ? p.seat === msg.seat : p.name === msg.name));
+    if (existing && msg.name) existing.name = msg.name;
     if (!existing) {
       // lowest free seat
       const taken = new Set(this.players.map((p) => p.seat));
@@ -277,6 +287,8 @@ export class HostedSessionClient extends Emitter {
     this.result = this._shapeResult(over);
     this.phase = 'over';
     this._socket?.send({ t: 'over', result: over });
+    // The browser build posted the result for the room; on the runtime only a
+    // server script writes results, so the adapter keeps this a no-op.
     this.platform.submitRoomResult(this.roomId, {
       winner: over.winner,
       reason: over.reason,

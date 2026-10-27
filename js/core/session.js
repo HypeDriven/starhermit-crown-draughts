@@ -12,7 +12,14 @@ import { chooseAction, hintAction, AI_LEVELS, evaluate } from '../rules/ai.js';
 import { createRng } from '../rules/rng.js';
 import { CONTENT_SCHEMA_VERSION } from '../content/index.js';
 
-const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+let now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+/**
+ * The clock sessions measure play time and round clocks with (milliseconds).
+ * The engine build drives it from the game clock (frame().time), which pauses
+ * while the game is suspended and advances deterministically in checks.
+ */
+export function setSessionClock(fn) { if (typeof fn === 'function') now = fn; }
 
 export class Emitter {
   constructor() { this.map = new Map(); }

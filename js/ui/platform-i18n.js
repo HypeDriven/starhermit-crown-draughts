@@ -1,9 +1,23 @@
-// StarHermit UI strings (sign-in, invite link, table invites, friends picker)
-// for the nine supported locales. Locale follows navigator.language through
-// the same picker as the Graphics strings.
+// StarHermit UI strings (sign-in, invite link, table invites, friends picker,
+// the leaderboard line) for the nine supported locales, in the game language
+// (js/i18n: the runtime's interface language).
 
-import { pickLocale } from './gfx-i18n.js';
 import { getLang } from '../i18n/index.js';
+
+const FALLBACK = { en: 'en-US', es: 'es-419', de: 'de-DE', fr: 'fr-FR', pt: 'pt-BR', it: 'it-IT' };
+
+/** Pick the closest supported locale for a BCP-47 tag. */
+export function pickLocale(tag) {
+  const t = String(tag || 'en-US');
+  if (PLATFORM_STRINGS[t]) return t;
+  const lower = t.toLowerCase();
+  const exact = Object.keys(PLATFORM_STRINGS).find((k) => k.toLowerCase() === lower);
+  if (exact) return exact;
+  if (/^en-(gb|ie|au|nz|za|in)/.test(lower)) return 'en-GB';
+  if (/^es-es/.test(lower)) return 'es-ES';
+  if (/^fr-ca/.test(lower)) return 'fr-CA';
+  return FALLBACK[lower.slice(0, 2)] || 'en-US';
+}
 
 export const PLATFORM_STRINGS = {
   'en-US': {

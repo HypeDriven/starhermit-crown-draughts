@@ -8,14 +8,14 @@ import { JOURNEY_STAGES, JOURNEY_CHAPTERS } from '../js/content/journey.js';
 import { CHALLENGES } from '../js/content/challenges.js';
 import { ACHIEVEMENTS } from '../js/content/achievements.js';
 import { THEMES, COSMETICS, MASTERY_TRACK } from '../js/content/themes.js';
-import { ACTIONS } from '../js/ui/input.js';
+import { ACTIONS } from '../js/ui/actions.js';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 
 function files(dir) {
   return readdirSync(dir).flatMap((f) => {
     const p = join(dir, f);
-    return statSync(p).isDirectory() ? (f === 'i18n' ? [] : files(p)) : p.endsWith('.js') ? [p] : [];
+    return statSync(p).isDirectory() ? (f === 'i18n' ? [] : files(p)) : /\.(js|ts)$/.test(p) ? [p] : [];
   });
 }
 
@@ -25,14 +25,14 @@ export function sourceKeys() {
   const keys = new Set();
   // T(cond ? 'a' : 'b', …) picks one of two keys.
   const ternary = /(?<![\w.$])(?:T|tr)\([^'"\n()]*?\?\s*'((?:[^'\\\n]|\\.)*)'\s*:\s*'((?:[^'\\\n]|\\.)*)'/g;
+  const ternary2 = /(?<![\w.$])(?:T|tr)\([^'"\n()]*?\?\s*"((?:[^"\\\n]|\\.)*)"\s*:\s*"((?:[^"\\\n]|\\.)*)"/g;
   const call = /(?<![\w.$])(?:T|N|tr)\(\s*(?:'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)")/g;
-  for (const f of files(join(ROOT, 'js'))) {
+  for (const f of [...files(join(ROOT, 'js')), ...files(join(ROOT, 'native'))]) {
     const src = readFileSync(f, 'utf8');
     for (const m of src.matchAll(call)) keys.add(unescape(m[1] ?? m[2]));
     for (const m of src.matchAll(ternary)) { keys.add(unescape(m[1])); keys.add(unescape(m[2])); }
+    for (const m of src.matchAll(ternary2)) { keys.add(unescape(m[1])); keys.add(unescape(m[2])); }
   }
-  const html = readFileSync(join(ROOT, 'index.html'), 'utf8');
-  for (const m of html.matchAll(/data-i18n(?:-aria)?="([^"]+)"/g)) keys.add(m[1]);
   return keys;
 }
 

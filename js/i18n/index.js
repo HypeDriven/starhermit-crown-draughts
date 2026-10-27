@@ -5,12 +5,10 @@
 // itself). Placeholders use {name}. N('…') marks a string for extraction
 // without translating it yet (the caller translates at display time).
 //
-// The locale comes from sh-language.js (window.StarHermitLanguage): the game's
-// Language setting (`ui.language`), Automatic → the StarHermit account's
-// preferred language → navigator.languages → en-US. `?lang=` forces a locale
-// for one page load (QA links) and hides the selector. A change re-applies
-// `data-i18n` markup, sets <html lang>, and notifies onLanguage listeners so
-// every screen, HUD and dialog re-renders in place.
+// The locale is the runtime's interface language (Options › Language, else
+// the device's), mapped to the nearest shipped locale by native/i18n.ts,
+// which calls setLocale; onLanguage listeners hear the change (the UI is
+// immediate mode, so screens follow on the next frame by themselves).
 
 import EN_GB from './locales/en-GB.js';
 import { ES_419, ES_ES } from './locales/es.js';
@@ -62,35 +60,10 @@ export function getLang() { return lang; }
 
 export function onLanguage(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
-/** Re-apply data-i18n (text) and data-i18n-aria (aria-label) markup. */
-export function applyMarkup(root = globalThis.document) {
-  if (!root?.querySelectorAll) return;
-  for (const node of root.querySelectorAll('[data-i18n]')) node.textContent = T(node.dataset.i18n);
-  for (const node of root.querySelectorAll('[data-i18n-aria]')) node.setAttribute('aria-label', T(node.dataset.i18nAria));
-}
-
 export function setLocale(next) {
   const resolved = DICTS[next] ? next : 'en-US';
   const changed = resolved !== lang;
   lang = resolved;
   dict = DICTS[lang];
-  const doc = globalThis.document;
-  if (doc?.documentElement) {
-    doc.documentElement.lang = lang;
-    if (doc.readyState !== 'loading') applyMarkup(doc);
-  }
   if (changed) for (const fn of [...listeners]) { try { fn(lang); } catch (e) { console.error(e); } }
-}
-
-/** Wire the StarHermit language preference (browser only). Returns the sh-language instance or null. */
-export function initLanguage() {
-  const SHL = globalThis.StarHermitLanguage;
-  let forced = null;
-  try { forced = new URLSearchParams(globalThis.location?.search || '').get('lang'); } catch { /* opaque origin */ }
-  const forcedLocale = forced && SHL ? SHL.match(forced, LOCALES) : null;
-  if (!SHL) { setLocale('en-US'); return null; }
-  return SHL.create({
-    game: 'crown-draughts', supported: LOCALES, panel: !forcedLocale,
-    apply: (locale) => setLocale(forcedLocale || locale),
-  });
 }

@@ -1,94 +1,30 @@
-// Persistence: settings, profile, progression, snapshots, leaderboards.
-// Versioned, checksummed documents; conflict detection keeps both snapshots
-// and asks the player when neither is a strict descendant. No credentials or
-// private chat are ever placed in saves.
+// Persistence shapes: the game's own options, the profile and the progress
+// document, with their defaults, plus readers for what the browser build
+// (before the StarHermit engine) left in the player's account. Pure functions
+// over plain data: native/platform.ts keeps them in the engine's stores
+// (`saves` for progress, `settings` for options and the profile, `storage`
+// for the round in progress). No credentials or private chat are ever saved.
 
 import { fnv1aHex } from '../rules/rng.js';
-import { DEFAULT_GRAPHICS, migrateGraphics } from '../render/gfx.js';
 
-const PREFIX = 'crown-draughts:';
-const SAVE_VERSION = 1;
-
-// In-memory fallback when localStorage is unavailable (private mode, tests).
-const memory = new Map();
-const backend = (() => {
-  try {
-    const k = `${PREFIX}probe`;
-    globalThis.localStorage?.setItem(k, '1');
-    globalThis.localStorage?.removeItem(k);
-    return globalThis.localStorage;
-  } catch {
-    return {
-      getItem: (k) => (memory.has(k) ? memory.get(k) : null),
-      setItem: (k, v) => memory.set(k, String(v)),
-      removeItem: (k) => memory.delete(k),
-    };
-  }
-})();
-
-function readRaw(key) {
-  try { return backend.getItem(PREFIX + key); } catch { return null; }
-}
-function writeRaw(key, value) {
-  try { backend.setItem(PREFIX + key, value); return true; } catch { return false; }
-}
-function removeRaw(key) {
-  try { backend.removeItem(PREFIX + key); } catch { /* ignore */ }
-}
-
-function checksum(payload) {
-  return fnv1aHex(JSON.stringify(payload));
-}
-
-function wrap(payload, parentId = null) {
-  const body = { payload, parentId };
-  return {
-    v: SAVE_VERSION,
-    id: `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e9).toString(36)}`,
-    at: new Date().toISOString(),
-    parentId,
-    sum: checksum(body),
-    ...body,
-  };
-}
-
-function unwrap(doc) {
-  if (!doc || typeof doc !== 'object') return null;
-  if (doc.v > SAVE_VERSION) return null; // newer than we understand — do not clobber
-  const { payload, parentId } = doc;
-  if (doc.sum !== checksum({ payload, parentId })) return null; // corrupted
-  return doc;
-}
-
-function readDoc(key) {
-  const raw = readRaw(key);
-  if (!raw) return null;
-  try { return unwrap(JSON.parse(raw)); } catch { return null; }
-}
-
-function writeDoc(key, payload, parentId = null) {
-  const doc = wrap(payload, parentId);
-  writeRaw(key, JSON.stringify(doc));
-  return doc;
-}
+const clone = (v) => JSON.parse(JSON.stringify(v));
 
 // ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------
 
+/**
+ * The game's own options. Sound, graphics, language, key and pad bindings,
+ * text size, high contrast and reduced motion are the runtime's Options now.
+ */
 export const DEFAULT_SETTINGS = {
-  v: 1,
-  audio: { music: 0.7, effects: 0.9, ambience: 0.6, voice: 0.8, muted: false, voiceCues: false },
-  graphics: { ...DEFAULT_GRAPHICS },                  // preset auto|low|balanced|high|ultra, render_scale, adaptive, show_fps, per-category overrides (see render/gfx.js)
+  v: 2,
+  muted: false,                                        // the M key: game sound off (the runtime's volumes still apply)
   accessibility: {
-    reducedMotion: false, highContrast: false, colorPalette: 'default', // default|deuteranopia|protanopia|tritanopia
-    largeText: false, leftHanded: false, holdToConfirm: false, timingAssist: false,
-    haptics: true, domBoard: false,
+    colorPalette: 'default',                           // default|deuteranopia|protanopia|tritanopia
+    leftHanded: false, timingAssist: false, haptics: true, domBoard: false,
   },
   camera: { preset: 'classic' },                       // classic|low|top
-  bindings: null,                                      // keyboard overrides {action: code}
-  gamepad: null,                                       // gamepad overrides {action: buttonIndex}
-  tutorialSeen: {},
   telemetryConsent: null,                              // null = not asked, true/false
   theme: 'royal-garden',
   cosmetics: { material: 'marble-ivory', trail: 'trail-petals', surround: 'surround-fountain', flourish: 'flourish-none' },
@@ -99,7 +35,6 @@ export const DEFAULT_PROFILE = {
   name: 'Guest Gardener',
   avatar: { color: '#d4af37', icon: 'crown' },
   rating: { duel: 1000, grand: 1000, melee: 1000 },
-  hosted: false,
 };
 
 export const DEFAULT_PROGRESS = {
@@ -118,159 +53,78 @@ export const DEFAULT_PROGRESS = {
   masteryClaimed: [],     // milestone star thresholds already acknowledged
 };
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
 /**
  * Merge a stored payload over defaults one level deep, so a save written before
  * a nested key existed (say `accessibility.haptics`) still gets its default
  * instead of an undefined that the UI would read as "off".
  */
-function mergeDefaults(defaults, stored) {
-  const out = structuredClone(defaults);
-  if (!stored || typeof stored !== 'object') return out;
+export function mergeDefaults(defaults, stored) {
+  const out = clone(defaults);
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return out;
   for (const [k, v] of Object.entries(stored)) {
+    if (!(k in defaults)) continue;
     const base = out[k];
     if (base && typeof base === 'object' && !Array.isArray(base) && v && typeof v === 'object' && !Array.isArray(v)) {
       out[k] = { ...base, ...v };
-    } else {
+    } else if (v !== undefined && (base === null || v === null || typeof v === typeof base)) {
       out[k] = v;
     }
   }
   return out;
 }
 
-export function loadSettings() {
-  const doc = readDoc('settings');
-  const out = mergeDefaults(DEFAULT_SETTINGS, doc?.payload);
-  out.graphics = migrateGraphics(doc?.payload?.graphics);
-  return out;
-}
-export function saveSettings(settings) {
-  const prev = readDoc('settings');
-  return writeDoc('settings', settings, prev?.id || null);
-}
+export const normalizeSettings = (s) => mergeDefaults(DEFAULT_SETTINGS, s);
+export const normalizeProfile = (p) => mergeDefaults(DEFAULT_PROFILE, p);
+export const normalizeProgress = (p) => mergeDefaults(DEFAULT_PROGRESS, p);
 
-export function loadProfile() {
-  const doc = readDoc('profile');
-  return mergeDefaults(DEFAULT_PROFILE, doc?.payload);
-}
-export function saveProfile(profile) {
-  const prev = readDoc('profile');
-  return writeDoc('profile', profile, prev?.id || null);
-}
+// ---------------------------------------------------------------------------
+// The browser build's documents
+// ---------------------------------------------------------------------------
 
-export function loadProgress() {
-  const doc = readDoc('progress');
-  return mergeDefaults(DEFAULT_PROGRESS, doc?.payload);
-}
-export function saveProgress(progress) {
-  const prev = readDoc('progress');
-  return writeDoc('progress', progress, prev?.id || null);
-}
-
-/** Raw document access for cloud-save conflict handling. */
-export function loadProgressDoc() {
-  return readDoc('progress');
-}
-export function adoptProgressDoc(doc) {
-  writeRaw('progress', JSON.stringify(doc));
-}
-
-// --- Cloud save -------------------------------------------------------------
-// The "cloud" document mirrors progress with an ancestor chain, used by the
-// conflict UI. The transport is the REAL platform slot: when hosted, the
-// platform adapter (js/core/platform.js) mirrors this document to
-// GET/PUT /api/v1/me/cloud-saves/{slug} (zip+base64, debounced, pagehide
-// flush) and the app seeds the local copy from the slot at boot; offline the
-// document stays local, exactly as before.
-
-export function loadCloudSave() {
-  return readDoc('cloudsave');
-}
-/** Adopt a synced cloud document fetched from the platform slot. */
-export function adoptCloudSaveDoc(doc) {
-  writeRaw('cloudsave', JSON.stringify(doc));
-}
-export function writeCloudSave(progress, parentId, force = false) {
-  const doc = writeDoc('cloudsave', progress, parentId);
-  // Mirror to the platform slot when hosted (debounced there), but only once
-  // the start-up load/compare is done (`cloudReady`) or when that compare
-  // itself pushes (`force`): an earlier push would queue a stale doc in the
-  // SDK that could overwrite a newer cloud save.
-  try {
-    const p = globalThis.window?.CBPlatform || globalThis.CBPlatform;
-    if (p && p.hosted && (force || p.cloudReady)) p.writeCloudSave(JSON.stringify(doc));
-  } catch { /* mirror errors never break saves */ }
-  return doc;
+function checksum(payload) {
+  return fnv1aHex(JSON.stringify(payload));
 }
 
 /**
- * Compare local and cloud saves. Returns
- *  { status: 'same' | 'local-ahead' | 'cloud-ahead' | 'conflict', local, cloud }
- * Conflict means neither document is a strict descendant of the other — the
- * player must choose, and both snapshots are preserved.
+ * The browser build's cloud save (the JS SDK slot `game:<slug>`, shown by the
+ * engine as a foreign save): its text is a versioned document
+ * `{ v, id, at, parentId, sum, payload }` whose payload is the progress
+ * document. Returns the progress, or null when it is not one (or damaged).
  */
-export function compareSaves(localDoc, cloudDoc) {
-  if (!localDoc && !cloudDoc) return { status: 'same', local: null, cloud: null };
-  if (!cloudDoc) return { status: 'local-ahead', local: localDoc, cloud: null };
-  if (!localDoc) return { status: 'cloud-ahead', local: null, cloud: cloudDoc };
-  if (localDoc.id === cloudDoc.id) return { status: 'same', local: localDoc, cloud: cloudDoc };
-  if (JSON.stringify(localDoc.payload) === JSON.stringify(cloudDoc.payload)) {
-    return { status: 'same', local: localDoc, cloud: cloudDoc };
+export function fromBrowserCloudSave(text) {
+  if (typeof text !== 'string' || !text) return null;
+  let doc;
+  try { doc = JSON.parse(text); } catch { return null; }
+  if (!doc || typeof doc !== 'object' || typeof doc.payload !== 'object' || !doc.payload) return null;
+  if (doc.v > 1) return null; // newer than we understand
+  const { payload, parentId = null } = doc;
+  if (doc.sum !== checksum({ payload, parentId })) return null;
+  return normalizeProgress(payload);
+}
+
+/**
+ * The browser build's per-player settings keys (the SDK's settings KV:
+ * audio, graphics, accessibility, camera, theme, cosmetics, gamepad). Returns
+ * the game settings a legacy key still means ({ key, value } pairs), or [].
+ */
+export function migrateLegacySetting(key, value) {
+  const obj = value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+  switch (key) {
+    case 'theme': return typeof value === 'string' ? [{ key: 'theme', value }] : [];
+    case 'camera': return obj && typeof obj.preset === 'string' ? [{ key: 'camera', value: { preset: obj.preset } }] : [];
+    case 'cosmetics': return obj ? [{ key: 'cosmetics', value: { ...DEFAULT_SETTINGS.cosmetics, ...pick(obj, Object.keys(DEFAULT_SETTINGS.cosmetics), 'string') } }] : [];
+    case 'accessibility': {
+      if (!obj) return [];
+      const a = { ...DEFAULT_SETTINGS.accessibility, ...pick(obj, ['leftHanded', 'timingAssist', 'haptics', 'domBoard'], 'boolean'), ...pick(obj, ['colorPalette'], 'string') };
+      return [{ key: 'accessibility', value: a }];
+    }
+    case 'audio': return obj && typeof obj.muted === 'boolean' ? [{ key: 'muted', value: obj.muted }] : [];
+    default: return []; // graphics, gamepad: the runtime's now
   }
-  // A cloud doc mirrors the progress doc named by its parentId, so a local doc
-  // sharing that parent is the next save after the one that was uploaded.
-  if (localDoc.parentId === cloudDoc.id || (cloudDoc.parentId && localDoc.parentId === cloudDoc.parentId) || isDescendant(localDoc, cloudDoc)) {
-    return { status: 'local-ahead', local: localDoc, cloud: cloudDoc };
-  }
-  if (cloudDoc.parentId === localDoc.id || isDescendant(cloudDoc, localDoc)) {
-    return { status: 'cloud-ahead', local: localDoc, cloud: cloudDoc };
-  }
-  return { status: 'conflict', local: localDoc, cloud: cloudDoc };
 }
 
-function isDescendant(doc, ancestor) {
-  // Walk parentId chain of doc looking for ancestor.id (chains are short).
-  let cur = doc;
-  let guard = 0;
-  while (cur && guard++ < 64) {
-    if (cur.parentId === ancestor.id) return true;
-    cur = cur.parentId ? readDoc(`archive:${cur.parentId}`) : null;
-  }
-  return false;
-}
-
-/** Preserve a losing snapshot under an archive key so nothing is ever lost. */
-export function archiveSave(doc) {
-  if (doc) writeRaw(`archive:${doc.id}`, JSON.stringify(doc));
-}
-
-// --- In-progress session snapshot (last safe local snapshot) ----------------
-
-export function saveSessionSnapshot(snapshot) {
-  return writeDoc('snapshot', snapshot);
-}
-export function loadSessionSnapshot() {
-  return readDoc('snapshot')?.payload || null;
-}
-export function clearSessionSnapshot() {
-  removeRaw('snapshot');
-}
-
-// --- Local leaderboard entries (daily/practice bests) ------------------------
-
-export function loadLocalBoards() {
-  return readDoc('boards')?.payload || { daily: [], practice: [] };
-}
-export function saveLocalBoards(boards) {
-  const prev = readDoc('boards');
-  return writeDoc('boards', boards, prev?.id || null);
-}
-
-/** Test-only: wipe everything. */
-export function _clearAll() {
-  for (const k of ['settings', 'profile', 'progress', 'cloudsave', 'snapshot', 'boards']) removeRaw(k);
-  memory.clear();
+function pick(obj, keys, type) {
+  const out = {};
+  for (const k of keys) if (typeof obj[k] === type) out[k] = obj[k];
+  return out;
 }
