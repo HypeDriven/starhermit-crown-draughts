@@ -3,7 +3,7 @@
 tests/
 tools/
 test-results/
-server.js
 spec.md
 knownissues.md
 coverart.png
+leaderboards.json

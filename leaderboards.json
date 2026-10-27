@@ -1,0 +1,4 @@
+{
+  "high-score": { "name": "High score", "scoreType": "integer", "sortDirection": "desc", "minScore": 0, "maxScore": 20000 },
+  "hosted-wins": { "name": "Hosted table wins", "scoreType": "integer", "sortDirection": "desc", "minScore": 1, "maxScore": 1000000 }
+}

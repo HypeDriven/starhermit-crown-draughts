@@ -1,189 +1,242 @@
+// server.js, the game's authoritative script, run as the platform runs it
+// (tests/fake-platform.mjs: a fresh context per invocation, JSON in and out):
+// it referees a hosted duel from the room's roster to its recorded result,
+// rejects illegal, out-of-turn, forged and unseated commands and any
+// client-sent result, plays empty seats, forfeits leavers, keeps the turn
+// deadline, and still posts solo totals for practice sessions.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { startDevServer } from '../server.js';
-import { verifyReplay } from '../js/core/session.js';
-import { legalActions } from '../js/rules/engine.js';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { ScriptSession, declarations } from './fake-platform.mjs';
+import { legalActions, scoreBreakdown } from '../js/rules/engine.js';
+import { replayTable } from '../js/core/hosted.js';
 
-let server;
-let base;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const A = 'aaaaaaaa-0000-4000-8000-000000000001';
+const B = 'bbbbbbbb-0000-4000-8000-000000000002';
+const C = 'cccccccc-0000-4000-8000-000000000003';
 
-test.before(async () => {
-  server = await startDevServer({ port: 0, dataFile: '/tmp/cd-test-data.json', quiet: true });
-  base = `http://localhost:${server.port}`;
-});
-
-test.after(async () => { await server.close(); });
-
-async function api(path, { method = 'GET', body = null, token = null } = {}) {
-  const res = await fetch(base + path, {
-    method,
-    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    body: body ? JSON.stringify(body) : null,
+function table({ ruleset = 'duel', humans = [A, B], metadata = {}, playerStates = {} } = {}) {
+  const roster = humans.map((id, i) => ({ userId: id, name: `P${i}`, team: 0, slot: i, ai: false }));
+  const s = new ScriptSession({
+    players: humans.map((id, i) => ({ id, name: `P${i}` })),
+    room: { roomId: 'room-1', metadata: { ruleset, ...metadata }, roster },
+    playerStates,
   });
-  let data = null;
-  try { data = await res.json(); } catch { /* empty */ }
-  return { status: res.status, data };
+  const out = s.create();
+  assert.ok(out.ok, 'createSession');
+  return s;
 }
+const game = (s) => s.state.game;
+const seatUser = (s, seat) => s.state.seats[seat].userId;
+const moveOf = (a) => ({ type: 'move', piece: a.piece, path: a.path });
 
-test('ping and time endpoints', async () => {
-  const ping = await api('/api/v1/ping');
-  assert.equal(ping.data.ok, true);
-  const time = await api('/api/v1/time');
-  assert.ok(Math.abs(time.data.epochMs - Date.now()) < 5000);
+test('the RULES block is the current js/rules and the boards match leaderboards.json', () => {
+  execFileSync(process.execPath, ['tools/build-server.mjs', '--check'], { cwd: ROOT, stdio: 'pipe' });
+  const boards = JSON.parse(readFileSync(ROOT + 'leaderboards.json', 'utf8'));
+  const d = declarations();
+  assert.deepEqual(d.BOARDS, boards);
+  assert.equal(d.tickRateHz, 1);
+  const manifest = readFileSync(ROOT + 'starhermit.txt', 'utf8');
+  assert.match(manifest, /^server=server\.js$/m);
 });
 
-test('static index.html is served', async () => {
-  const res = await fetch(base + '/index.html');
-  assert.equal(res.status, 200);
-  const text = await res.text();
-  assert.match(text, /Crown Draughts/);
-});
-
-test('full hosted duel: create, join, play, reject bad actors, replay verifies', async () => {
-  // create (host = seat 0)
-  const created = await api('/api/v1/sessions', { method: 'POST', body: { ruleset: 'duel', playerName: 'Host', listed: true } });
-  assert.ok(created.data.ok);
-  const { sessionId, joinCode, playerToken: hostToken } = created.data;
-  assert.equal(created.data.seat, 0);
-
-  // public listing shows it
-  const list = await api('/api/v1/sessions');
-  assert.ok(list.data.sessions.some((s) => s.id === sessionId));
-
-  // second player joins by code
-  const joined = await api(`/api/v1/sessions/${sessionId}/join`, { method: 'POST', body: { name: 'Guest', joinCode } });
-  assert.ok(joined.data.ok);
-  const guestToken = joined.data.playerToken;
-  assert.equal(joined.data.seat, 1);
-
-  // wrong code rejected
-  const bad = await api(`/api/v1/sessions/${sessionId}/join`, { method: 'POST', body: { name: 'X', joinCode: 'ZZZZZZ' } });
-  assert.equal(bad.status, 400);
-
-  // non-host cannot start
-  const noStart = await api(`/api/v1/sessions/${sessionId}/start`, { method: 'POST', token: guestToken });
-  assert.equal(noStart.status, 400);
-  // host starts
-  const started = await api(`/api/v1/sessions/${sessionId}/start`, { method: 'POST', token: hostToken });
-  assert.ok(started.data.ok);
-
-  // snapshot: source of truth
-  let snap = await api(`/api/v1/sessions/${sessionId}`, { token: hostToken });
-  assert.equal(snap.status, 200);
-  assert.equal(snap.data.you, 0);
-  assert.equal(snap.data.phase, 'active');
-  assert.equal(snap.data.state.turn, 0);
-
-  // guest cannot move (not their turn / not their seat)
-  let st = snap.data.state;
-  const whiteMove = legalActions(st)[0];
-  const outOfTurn = await api(`/api/v1/sessions/${sessionId}/commands`, {
-    method: 'POST', token: guestToken,
-    body: { commandId: 'c-bad', action: whiteMove },
-  });
-  assert.equal(outOfTurn.status, 400);
-  assert.match(outOfTurn.data.error, /not-your/);
-
-  // malformed command rejected
-  const malformed = await api(`/api/v1/sessions/${sessionId}/commands`, {
-    method: 'POST', token: hostToken,
-    body: { commandId: 'c-mal', action: { type: 'move', piece: 999, path: [[0, 0]] } },
-  });
-  assert.equal(malformed.status, 400);
-
-  // host moves
-  const ok1 = await api(`/api/v1/sessions/${sessionId}/commands`, {
-    method: 'POST', token: hostToken,
-    body: { commandId: 'c-1', action: whiteMove },
-  });
-  assert.ok(ok1.data.ok);
-
-  // duplicate command id → idempotent ok, no double-apply
-  const dup = await api(`/api/v1/sessions/${sessionId}/commands`, {
-    method: 'POST', token: hostToken,
-    body: { commandId: 'c-1', action: whiteMove },
-  });
-  assert.ok(dup.data.ok);
-  assert.equal(dup.data.duplicate, true);
-  snap = await api(`/api/v1/sessions/${sessionId}`, { token: guestToken });
-  assert.equal(snap.data.state.ply, 1, 'duplicate did not advance the game');
-
-  // guest moves
-  const blackMove = legalActions(snap.data.state)[0];
-  const ok2 = await api(`/api/v1/sessions/${sessionId}/commands`, {
-    method: 'POST', token: guestToken,
-    body: { commandId: 'c-2', action: blackMove },
-  });
-  assert.ok(ok2.data.ok);
-
-  // chat: works, rate-limited at 10/min
-  const chat1 = await api(`/api/v1/sessions/${sessionId}/chat`, { method: 'POST', token: hostToken, body: { text: 'Good luck!' } });
-  assert.ok(chat1.data.ok);
-  let lastChat = null;
-  for (let i = 0; i < 12; i++) {
-    lastChat = await api(`/api/v1/sessions/${sessionId}/chat`, { method: 'POST', token: hostToken, body: { text: `msg ${i}` } });
+test('a hosted duel is refereed to its end and the script records the result', () => {
+  const s = table({ playerStates: { [A]: { elo: 1300, hostedWins: 4 } } });
+  assert.equal(s.state.mode, 'table');
+  assert.deepEqual(s.state.seats.map((x) => [x.userId, x.ai]), [[A, false], [B, false]]);
+  const first = s.last(A);
+  assert.equal(first.ply, 0);
+  assert.deepEqual(s.last(B), first, 'both players hear the table');
+  let plies = 0;
+  while (!s.result) {
+    const g = game(s);
+    const acts = legalActions(g);
+    const out = s.send(seatUser(s, g.turn), { type: 'act', action: moveOf(acts[acts.length - 1]) });
+    assert.ok(out.ok, `ply ${plies}: ${out.error}`);
+    plies++;
+    assert.ok(plies < 400);
   }
-  assert.equal(lastChat.status, 400);
-  assert.equal(lastChat.data.error, 'rate-limited');
-
-  // report hook
-  const rep = await api(`/api/v1/sessions/${sessionId}/report`, { method: 'POST', token: guestToken, body: { playerSeat: 0, reason: 'spam' } });
-  assert.ok(rep.data.ok);
-
-  // resign: host resigns on their turn → guest wins
-  const resign = await api(`/api/v1/sessions/${sessionId}/commands`, {
-    method: 'POST', token: hostToken,
-    body: { commandId: 'c-3', action: { type: 'resign', player: 0 } },
-  });
-  assert.ok(resign.data.ok);
-  assert.ok(resign.data.over);
-  assert.equal(resign.data.over.winner, 1);
-  assert.ok(resign.data.over.ratingChanges, 'server-authoritative rating change present');
-
-  // game over: further commands rejected
-  const after = await api(`/api/v1/sessions/${sessionId}/commands`, {
-    method: 'POST', token: guestToken,
-    body: { commandId: 'c-4', action: { type: 'resign', player: 1 } },
-  });
-  assert.equal(after.status, 400);
-
-  // replay verifies end-to-end
-  const replay = await api(`/api/v1/sessions/${sessionId}/replay`, { token: guestToken });
-  assert.ok(replay.data.ok);
-  const check = verifyReplay(replay.data.data);
-  assert.ok(check.ok, `replay verifies: ${check.reason || ''}`);
-  assert.equal(check.result.winner, 1);
-});
-
-test('reconnect: snapshot after several plies matches and carries chat', async () => {
-  const created = await api('/api/v1/sessions', { method: 'POST', body: { ruleset: 'duel', playerName: 'A', listed: false } });
-  const { sessionId, joinCode, playerToken: ta } = created.data;
-  const joined = await api(`/api/v1/sessions/${sessionId}/join`, { method: 'POST', body: { name: 'B', joinCode } });
-  const tb = joined.data.playerToken;
-  await api(`/api/v1/sessions/${sessionId}/start`, { method: 'POST', token: ta });
-  let snap = await api(`/api/v1/sessions/${sessionId}`, { token: ta });
-  for (let i = 0; i < 6; i++) {
-    const mover = snap.data.state.turn === 0 ? ta : tb;
-    const mv = legalActions(snap.data.state)[0];
-    const r = await api(`/api/v1/sessions/${sessionId}/commands`, {
-      method: 'POST', token: mover,
-      body: { commandId: `r-${i}`, action: mv },
-    });
-    assert.ok(r.data.ok);
-    snap = await api(`/api/v1/sessions/${sessionId}`, { token: mover });
+  const g = game(s);
+  assert.equal(g.phase, 'over');
+  const r = s.result;
+  assert.equal(r.kind, g.result.winner === null ? 'draw' : 'win');
+  assert.equal(r.winner, g.result.winner);
+  assert.equal(r.reason, g.result.reason);
+  assert.equal(r.plies, plies);
+  assert.equal(r.ranked, true);
+  assert.deepEqual(r.seats.map((x) => x.userId), [A, B]);
+  // The clients' last table carries the ending, and replaying its log gives the same game.
+  const t = s.last(B);
+  assert.ok(t.over && t.over.recorded);
+  assert.equal(t.over.winner, r.winner);
+  const replay = replayTable(t);
+  assert.equal(replay.ply, g.ply);
+  assert.deepEqual(replay.result.winner, g.result.winner);
+  assert.equal(t.over.breakdowns[0].total, scoreBreakdown(g, 0, { elapsedMs: r.elapsedMs }).total);
+  // Ratings and the hosted-wins board.
+  const elo = s.eloUpdates[0];
+  assert.ok(elo && typeof elo[A] === 'number' && typeof elo[B] === 'number');
+  if (r.winner !== null) {
+    const w = seatUser(s, r.winner), l = seatUser(s, 1 - r.winner);
+    assert.ok(elo[w] > (w === A ? 1300 : 1200) && elo[l] < (l === A ? 1300 : 1200));
+    assert.deepEqual(Object.keys(s.scores[0]), ['hosted-wins']);
+    assert.equal(s.scores[0]['hosted-wins'][w], w === A ? 5 : 1);
+    assert.equal(s.playerStates[l].hostedLosses, 1);
   }
-  assert.equal(snap.data.state.ply, 6);
-  await api(`/api/v1/sessions/${sessionId}/chat`, { method: 'POST', token: ta, body: { text: 'hello again' } });
-  const recon = await api(`/api/v1/sessions/${sessionId}`, { token: tb });
-  assert.equal(recon.data.state.ply, 6);
-  assert.equal(recon.data.chat[recon.data.chat.length - 1].text, 'hello again');
-  assert.equal(recon.data.you, 1);
+  // A finished round takes no more commands.
+  assert.equal(s.send(A, { type: 'act', action: { type: 'resign' } }).ok, false);
 });
 
-test('not-a-member rejected from private session', async () => {
-  const created = await api('/api/v1/sessions', { method: 'POST', body: { ruleset: 'duel', playerName: 'Solo' } });
-  const { sessionId } = created.data;
-  const snap = await api(`/api/v1/sessions/${sessionId}`, { token: 'bogus-token' });
-  assert.equal(snap.status, 403);
-  assert.equal(snap.data.error, 'not-a-member');
+test('illegal, out-of-turn, forged and unseated commands are rejected', () => {
+  const s = table();
+  const g = game(s);
+  assert.equal(g.turn, 0);
+  const mover = seatUser(s, 0), other = seatUser(s, 1);
+  const legal = legalActions(g);
+  const reject = (from, data, reason) => {
+    const before = JSON.stringify(s.state);
+    const out = s.send(from, data);
+    assert.equal(out.ok, false, JSON.stringify(data));
+    if (reason) assert.equal(out.error, reason);
+    assert.equal(JSON.stringify(s.state), before, 'state unchanged');
+  };
+  // Not the sender's turn, even naming the mover's seat or piece.
+  reject(other, { type: 'act', action: moveOf(legal[0]) }, 'not-your-turn');
+  reject(other, { type: 'act', action: { ...moveOf(legal[0]), player: 0, seat: 0 } }, 'not-your-turn');
+  // An opponent's piece.
+  const theirs = g.pieces.find((p) => p.owner === 1 && !p.captured);
+  reject(mover, { type: 'act', action: { type: 'move', piece: theirs.id, path: [[theirs.r - 1, theirs.c - 1]] } });
+  // A square it cannot reach, a malformed path, a missing action.
+  const mine = legal[0];
+  reject(mover, { type: 'act', action: { type: 'move', piece: mine.piece, path: [[mine.path[0][0] + 2, mine.path[0][1]]] } });
+  reject(mover, { type: 'act', action: { type: 'move', piece: mine.piece, path: 'e3' } }, 'bad-format');
+  reject(mover, { type: 'act' }, 'bad-format');
+  // Clients cannot claim the clock, an unknown action, or the result.
+  reject(other, { type: 'act', action: { type: 'timeout', player: 0 } }, 'unknown-action');
+  reject(mover, { type: 'act', action: { type: 'win' } }, 'unknown-action');
+  reject(mover, { type: 'result', scores: { 'high-score': 20000, 'hosted-wins': 999 } }, 'unknown-command');
+  reject(mover, { type: 'over', winner: 0 }, 'unknown-command');
+  // Someone not seated at the table.
+  reject(C, { type: 'act', action: moveOf(legal[0]) }, 'not-seated');
+  reject(C, { type: 'chat', text: 'hi' }, 'not-seated');
+  // Answering a draw no one offered.
+  reject(other, { type: 'act', action: { type: 'acceptDraw' } }, 'no-draw-pending');
+  assert.equal(s.result, null);
+  assert.equal(s.scores.length, 0);
+  // A forged `player` does not resign someone else: the sender's own seat resigns.
+  const out = s.send(mover, { type: 'act', action: { type: 'resign', player: 1 } });
+  assert.ok(out.ok);
+  assert.equal(s.result.winner, 1);
+  assert.equal(s.result.reason, 'resignation');
+  assert.equal(s.result.winnerUserId, other);
+});
+
+test('chat is attributed by the platform, trimmed and capped', () => {
+  const s = table();
+  assert.ok(s.send(B, { type: 'chat', text: `  ${'x'.repeat(300)}\n` }).ok);
+  const m = s.last(A, 'chat');
+  assert.equal(m.seat, 1);
+  assert.equal(m.name, 'P1');
+  assert.equal(m.text.length, 200);
+  assert.equal(s.send(B, { type: 'chat', text: '   ' }).ok, false);
+});
+
+test('sync answers only the sender', () => {
+  const s = table();
+  s.inbox.clear();
+  assert.ok(s.send(B, { type: 'sync' }).ok);
+  assert.ok(s.last(B));
+  assert.equal(s.last(A), null);
+});
+
+test('empty seats are played by the script on its tick; a lone human is unranked', () => {
+  const s = table({ ruleset: 'melee', humans: [A] });
+  assert.deepEqual(s.state.seats.map((x) => x.ai), [false, true, true, true]);
+  for (let i = 0; i < 2000 && !s.result; i++) {
+    const g = game(s);
+    if (s.state.seats[g.turn].ai) { s.tick(1000); continue; }
+    const acts = legalActions(g);
+    assert.ok(s.send(A, { type: 'act', action: moveOf(acts[0]) }).ok);
+  }
+  assert.ok(s.result, 'the melee ended');
+  assert.equal(s.result.ranked, false);
+  assert.equal(s.scores.length, 0);
+  assert.equal(s.eloUpdates.length, 0);
+});
+
+test('the AI waits for its delay and answers a draw offer at once', () => {
+  const s = table({ humans: [A] });
+  assert.equal(game(s).turn, 0);
+  assert.ok(s.send(A, { type: 'act', action: moveOf(legalActions(game(s))[0]) }).ok);
+  assert.equal(game(s).ply, 1);
+  s.tick(100);
+  assert.equal(game(s).ply, 1, 'not before its delay');
+  s.tick(1000);
+  assert.equal(game(s).ply, 2, 'the AI moved');
+  assert.ok(s.send(A, { type: 'act', action: { type: 'offerDraw' } }).ok);
+  const g = game(s);
+  assert.equal(g.pendingDraw, null, 'answered');
+  assert.ok(['accept', 'decline'].includes(g.log[g.log.length - 1].t));
+});
+
+test('a player who leaves the room forfeits; everyone leaving abandons the round', () => {
+  const s = table();
+  s.presence[B].left = true;
+  s.tick(1000);
+  assert.equal(s.result.winner, 0);
+  assert.equal(s.result.reason, 'resignation');
+  assert.equal(s.result.seats[1].left, true);
+  assert.ok(s.scores[0]['hosted-wins'][A] >= 1);
+
+  const t = table();
+  t.presence[A].left = true;
+  t.presence[B].left = true;
+  t.tick(1000);
+  assert.equal(t.result.kind, 'abandoned');
+  assert.equal(t.result.ranked, false);
+  assert.equal(t.scores.length, 0);
+  assert.equal(t.eloUpdates.length, 0);
+});
+
+test('the turn deadline times out the player to move (clamped to at least 30 s)', () => {
+  const s = table({ metadata: { turnDeadlineMs: 5 } });
+  assert.equal(s.state.deadlineMs, 30000);
+  assert.equal(s.last(A).deadlineAt, s.now + 30000);
+  s.tick(29000);
+  assert.equal(s.result, null);
+  s.tick(1000);
+  assert.equal(s.result.reason, 'timeout');
+  assert.equal(s.result.winner, 1);
+  const none = table();
+  none.tick(3_600_000);
+  assert.equal(none.result, null, 'no deadline without one in the metadata');
+});
+
+test('an unknown ruleset falls back to the duel; roster order seats the houses', () => {
+  const s = table({ ruleset: 'chess', humans: [B, A] });
+  assert.equal(s.state.ruleset, 'duel');
+  assert.deepEqual(s.state.seats.map((x) => x.userId), [B, A]);
+});
+
+test('practice sessions post a range-checked solo total (and nothing else)', () => {
+  const s = new ScriptSession({ players: [{ id: A, name: 'P' }, { id: 'ai', name: 'House', ai: true }] });
+  assert.ok(s.create().ok);
+  assert.equal(s.state.mode, 'score');
+  const out = s.send(A, { type: 'result', scores: { 'high-score': 2020, 'hosted-wins': 50 } });
+  assert.ok(out.ok);
+  assert.deepEqual(s.scores[0], { 'high-score': { [A]: 2020 } });
+  assert.deepEqual(s.last(A, 'result-ack').accepted, ['high-score']);
+  assert.ok(s.result);
+  for (const bad of [-1, 20001, 12.5, '900', null]) {
+    const t = new ScriptSession({ players: [{ id: A, name: 'P' }] });
+    t.create();
+    t.send(A, { type: 'result', scores: { 'high-score': bad } });
+    assert.deepEqual(t.scores[0], {}, `refused ${bad}`);
+  }
+  const u = new ScriptSession({ players: [{ id: A, name: 'P' }] });
+  u.create();
+  assert.equal(u.send(A, { type: 'act', action: { type: 'resign' } }).ok, false);
 });
