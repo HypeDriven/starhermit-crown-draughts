@@ -1,0 +1,45 @@
+# Practice against the Novice: the setup by keys (below the fold at 960 × 540),
+# a move on the 3D board by the cursor, then resign from the Actions drawer, to the results.
+until 600 Crown Draughts
+frames 20
+click No thanks
+frames 5
+click =Play
+frames 10
+click =Practice
+until 120 Take your seat
+frames 10
+click =Novice (800)
+frames 5
+key Tab 1
+frames 3
+key Tab 1
+frames 3
+key Tab 1
+frames 3
+key Enter 1
+until 300 to move — you
+frames 90
+save practice-start
+key KeyS 1
+frames 5
+key KeyS 1
+frames 5
+key Enter 1
+frames 10
+key KeyS 1
+frames 5
+key KeyD 1
+frames 5
+key Enter 1
+frames 120
+click =Actions
+frames 10
+click =Resign
+until 60 Resign this round?
+frames 5
+click =Resign #2
+until 300 Defeat
+frames 30
+save practice-results
+expect Score breakdown

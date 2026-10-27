@@ -611,7 +611,11 @@ function coachCard(w: number): void {
     para(c.title, iw, "rail-h");
     para(c.text, iw, "text");
     if (c.kind === "action") para(T("Your turn — play the move."), iw, "lesson-goal");
-    else if (ui.id("coach-continue").style("btn", "btn-primary").button(T("Continue"))) { audio.play("uiConfirm"); A.lessonAdvance(); }
+    else if (ui.id("coach-continue").style("btn", "btn-primary").button(T("Continue"))) {
+      audio.play("uiConfirm");
+      // The lesson may end (and the round with it): after this frame's UI.
+      queueMicrotask(() => A.lessonAdvance());
+    }
   }, "coach-card");
 }
 function leftRail(w: number, h: number, withCoach: boolean): void {
@@ -707,8 +711,7 @@ function tray(): void {
 const TRAY_H = (): number => (phone() ? 116 : 64);
 
 /** The semantic board (the browser build's HTML board): every playable square a button. */
-function semanticBoard(maxSize: number, bottom: number): void {
-  const g = app.game!;
+function semanticBoard(g: NonNullable<typeof app.game>, maxSize: number, bottom: number): void {
   const st = g.state;
   const n = st.size;
   const size = Math.max(160, Math.min(maxSize, 460));
@@ -760,6 +763,7 @@ const paletteTargetRing = (): string => (["deuteranopia", "protanopia"].includes
 
 function gameHud(): void {
   if (!app.session || !app.game) return;
+  const game = app.game;
   const isCompact = compact();
   const left = !!app.settings.accessibility.leftHanded;
   hudTopbar();
@@ -783,7 +787,7 @@ function gameHud(): void {
   }
   if (app.boardShown) {
     const bottom = isCompact ? TRAY_H() + 12 : 12;
-    semanticBoard(Math.min(VW * 0.92, VH * 0.46), bottom);
+    semanticBoard(game, Math.min(VW * 0.92, VH * 0.46), bottom);
   }
   if (app.countdown && app.countdown.i >= 0 && app.countdown.i < app.countdown.steps.length) {
     ui.place("countdown", "center", () => { ui.style("countdown").label(app.countdown!.steps[app.countdown!.i]!); });

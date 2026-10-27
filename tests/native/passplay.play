@@ -1,0 +1,286 @@
+# Pass & Play: a whole duel on the semantic board, to the results (tools/gen-play.mjs).
+until 600 Crown Draughts
+frames 20
+click No thanks
+frames 5
+click =Play
+frames 10
+click =Pass & Play
+frames 10
+click =Begin
+until 300 Ivory to move
+frames 90
+key KeyB 1
+frames 10
+# ply 1: Ivory
+click =b3: Ivory piece
+frames 3
+click =a4: empty — legal destination
+frames 3
+frames 60
+# ply 2: Onyx
+click =g6: Onyx piece
+frames 3
+click =h5: empty — legal destination
+frames 3
+frames 60
+# ply 3: Ivory
+click =f3: Ivory piece
+frames 3
+click =g4: empty — legal destination
+frames 3
+frames 60
+# ply 4: Onyx
+click =h5: Onyx piece
+frames 3
+click =f3: empty — legal destination
+frames 3
+frames 60
+# ply 5: Ivory
+click =g2: Ivory piece
+frames 3
+click =e4: empty — legal destination
+frames 3
+frames 60
+# ply 6: Onyx
+click =h7: Onyx piece
+frames 3
+click =g6: empty — legal destination
+frames 3
+frames 60
+# ply 7: Ivory
+click =e4: Ivory piece
+frames 3
+click =f5: empty — legal destination
+frames 3
+frames 60
+# ply 8: Onyx
+click =g6: Onyx piece
+frames 3
+click =e4: empty — legal destination
+frames 3
+frames 60
+# ply 9: Ivory
+click =d3: Ivory piece
+frames 3
+click =f5: empty — legal destination
+frames 3
+frames 60
+# ply 10: Onyx
+click =e6: Onyx piece
+frames 3
+click =g4: empty — legal destination
+frames 3
+frames 60
+# ply 11: Ivory
+click =h3: Ivory piece
+frames 3
+click =f5: empty — legal destination
+frames 3
+frames 60
+# ply 12: Onyx
+click =g8: Onyx piece
+frames 3
+click =h7: empty — legal destination
+frames 3
+frames 60
+# ply 13: Ivory
+click =e2: Ivory piece
+frames 3
+click =f3: empty — legal destination
+frames 3
+frames 60
+# ply 14: Onyx
+click =h7: Onyx piece
+frames 3
+click =g6: empty — legal destination
+frames 3
+frames 60
+# ply 15: Ivory
+click =f5: Ivory piece
+frames 3
+click =h7: empty — legal destination
+frames 3
+frames 60
+# ply 16: Onyx
+click =f7: Onyx piece
+frames 3
+click =g6: empty — legal destination
+frames 3
+frames 60
+# ply 17: Ivory
+click =h7: Ivory piece
+frames 3
+click =f5: empty — legal destination
+frames 3
+frames 60
+# ply 18: Onyx
+click =e8: Onyx piece
+frames 3
+click =f7: empty — legal destination
+frames 3
+frames 60
+# ply 19: Ivory
+click =f3: Ivory piece
+frames 3
+click =g4: empty — legal destination
+frames 3
+frames 60
+# ply 20: Onyx
+click =f7: Onyx piece
+frames 3
+click =g6: empty — legal destination
+frames 3
+frames 60
+# ply 21: Ivory
+click =f5: Ivory piece
+frames 3
+click =h7: empty — legal destination
+frames 3
+frames 60
+# ply 22: Onyx
+click =d7: Onyx piece
+frames 3
+click =e6: empty — legal destination
+frames 3
+frames 60
+# ply 23: Ivory
+click =h7: Ivory piece
+frames 3
+click =g8: empty — legal destination
+frames 3
+frames 60
+# ply 24: Onyx
+click =c8: Onyx piece
+frames 3
+click =d7: empty — legal destination
+frames 3
+frames 60
+# ply 25: Ivory
+click =a2: Ivory piece
+frames 3
+click =b3: empty — legal destination
+frames 3
+frames 60
+# ply 26: Onyx
+click =e6: Onyx piece
+frames 3
+click =f5: empty — legal destination
+frames 3
+frames 60
+# ply 27: Ivory
+click =g4: Ivory piece
+frames 3
+click =e6: empty — legal destination
+frames 3
+click =c8: empty — legal destination
+frames 3
+frames 60
+# ply 28: Onyx
+click =c6: Onyx piece
+frames 3
+click =d5: empty — legal destination
+frames 3
+frames 60
+# ply 29: Ivory
+click =b1: Ivory piece
+frames 3
+click =a2: empty — legal destination
+frames 3
+frames 60
+# ply 30: Onyx
+click =b7: Onyx piece
+frames 3
+click =c6: empty — legal destination
+frames 3
+frames 60
+# ply 31: Ivory
+click =c2: Ivory piece
+frames 3
+click =d3: empty — legal destination
+frames 3
+frames 60
+# ply 32: Onyx
+click =a8: Onyx piece
+frames 3
+click =b7: empty — legal destination
+frames 3
+frames 60
+# ply 33: Ivory
+click =b3: Ivory piece
+frames 3
+click =c4: empty — legal destination
+frames 3
+frames 60
+# ply 34: Onyx
+click =d5: Onyx piece
+frames 3
+click =b3: empty — legal destination
+frames 3
+frames 60
+# ply 35: Ivory
+click =a2: Ivory piece
+frames 3
+click =c4: empty — legal destination
+frames 3
+frames 60
+# ply 36: Onyx
+click =c6: Onyx piece
+frames 3
+click =d5: empty — legal destination
+frames 3
+frames 60
+# ply 37: Ivory
+click =c4: Ivory piece
+frames 3
+click =e6: empty — legal destination
+frames 3
+frames 60
+# ply 38: Onyx
+click =b7: Onyx piece
+frames 3
+click =c6: empty — legal destination
+frames 3
+frames 60
+# ply 39: Ivory
+click =d1: Ivory piece
+frames 3
+click =c2: empty — legal destination
+frames 3
+frames 60
+# ply 40: Onyx
+click =c6: Onyx piece
+frames 3
+click =d5: empty — legal destination
+frames 3
+frames 60
+# ply 41: Ivory
+click =e6: Ivory piece
+frames 3
+click =c4: empty — legal destination
+frames 3
+frames 60
+# ply 42: Onyx
+click =a6: Onyx piece
+frames 3
+click =b5: empty — legal destination
+frames 3
+frames 60
+# ply 43: Ivory
+click =c4: Ivory piece
+frames 3
+click =a6: empty — legal destination
+frames 3
+frames 60
+until 600 Ivory wins
+frames 30
+save passplay-results
+expect Score breakdown
+key Tab 1
+frames 3
+key Tab 1
+frames 5
+save passplay-leave
+key Enter 1
+frames 5
+until 300 Learn the rules

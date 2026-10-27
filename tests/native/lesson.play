@@ -1,0 +1,25 @@
+# Learn: the first lesson, its reading step and its move on the semantic board, to complete.
+until 600 Crown Draughts
+frames 20
+click No thanks
+frames 5
+click =Learn the rules
+until 120 Learn the court
+frames 10
+click =First Steps
+until 300 First Steps — step 1/2
+frames 10
+click =Continue
+until 120 step 2/2
+frames 80
+key KeyB 1
+frames 10
+click =b3: You piece
+frames 5
+click =c4: empty — legal destination
+until 300 Well played
+frames 10
+save lesson-done
+click =Continue
+until 300 Learn the court
+expect Lesson complete
