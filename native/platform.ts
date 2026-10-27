@@ -15,14 +15,16 @@
 //   and reduced motion are the runtime's Options;
 // - the round in progress (Resume) stays on the device (`storage`);
 // - a finished solo round's total goes to the high-score board through
-//   score-script.js: a practice session whose socket carries
+//   server.js: a practice session whose socket carries
 //   { type: 'result', scores }, as the JS SDK's submitScores did;
-// - hosted tables are realtime rooms (rooms.*): `roomsAdapter` gives
-//   js/core/hosted.js the browser build's platform surface over them.
+// - hosted tables are realtime rooms (rooms.*) for the lobby and the
+//   session the platform binds to a started room for the round, refereed by
+//   server.js over its game socket (connectGame): `roomsAdapter` gives
+//   js/core/hosted.js that surface. The script records the result.
 import type { JsonValue } from "starhermit:engine";
 import {
   connectGame, friends, inviteLink as fetchInviteLink, leaderboards, onPlayerChange, player, profile as fetchProfile,
-  rooms, serverNow, sessions, type Leaderboard, type Room, type RoomSocket,
+  rooms, serverNow, sessions, type GameSocket, type Leaderboard, type Room, type RoomSocket,
 } from "starhermit:platform";
 import { saves, settings, storage } from "starhermit:storage";
 import {
@@ -178,7 +180,7 @@ async function highScoreBoard(): Promise<Leaderboard | null> {
   return board;
 }
 
-/** Posts a finished round's total through score-script.js; whether it was
+/** Posts a finished round's total through server.js (its score posting); whether it was
  * taken and the player's rank (null past the first 100). Never rejects. */
 export async function submitScore(points: number): Promise<{ posted: boolean; rank: number | null }> {
   const me = player();
@@ -235,29 +237,40 @@ function mySeat(room: Room): number {
   return p ? p.slot : 1;
 }
 const roomRes = (room: Room | null): Res => (room
-  ? { ok: true, status: 200, data: { roomId: room.id, seat: mySeat(room), metadata: room.metadata, joinCode: room.joinCode } }
+  ? { ok: true, status: 200, data: { roomId: room.id, seat: mySeat(room), metadata: room.metadata, joinCode: room.joinCode, gameSessionId: room.gameSessionId } }
   : { ok: false, status: 404, error: "not-found" });
 
 interface SocketHandlers {
   onOpen?: () => void;
-  onMessage?: (m: { control?: unknown; msg?: unknown; from?: string }) => void;
   onClose?: () => void;
   onAuthLost?: () => void;
   onTermsRequired?: () => void;
   onUnavailable?: (code: string) => void;
 }
+interface RoomHandlers extends SocketHandlers {
+  onMessage?: (m: { control?: unknown }) => void;
+}
+interface GameHandlers extends SocketHandlers {
+  onMessage?: (data: unknown) => void;
+  onError?: (message: string) => void;
+}
+function stopped(h: SocketHandlers, reason: string): void {
+  if (reason === "terms-required") h.onTermsRequired?.();
+  else if (reason === "signed-out") h.onAuthLost?.();
+  else if (reason !== "closed") h.onUnavailable?.(reason);
+}
 
 /**
- * The browser build's platform surface for js/core/hosted.js (host-routed
- * tables: the host runs the rules session and relays snapshots), over the
- * runtime's realtime rooms. Room results were posted by the host client
- * (POST /rooms/{id}/result); on the runtime only a server script writes
- * results, so `submitRoomResult` is a no-op.
+ * js/core/hosted.js's platform surface: realtime rooms for the lobby (create,
+ * open, quick-join, invites, the roster), `startRoom` (the platform binds a
+ * session to the room, refereed by server.js), and that session's game socket
+ * for the round. No client posts a result: the script returns it.
  */
 export const roomsAdapter = {
   get hosted(): boolean { return player() !== null; },
   get online(): boolean { return player() !== null; },
   get slug(): string { return "crown-draughts"; },
+  get userId(): string | null { return player()?.userId ?? null; },
   createRoom(config: { teamCount: number; seatsPerTeam: number; metadata?: JsonValue; aiPlayers?: unknown }): Promise<Res> {
     return call(async () => {
       const room = await rooms.create({ teamCount: config.teamCount, seatsPerTeam: config.seatsPerTeam, metadata: config.metadata ?? null, backfillAiPlayers: false });
@@ -265,6 +278,13 @@ export const roomsAdapter = {
     });
   },
   openRoom(roomId: string): Promise<Res> { return call(() => rooms.open(roomId)); },
+  /** Host: starts the room; `data.gameSessionId` is the script's session (null when it could not be made). */
+  startRoom(roomId: string): Promise<Res> {
+    return call(async () => {
+      const room = await rooms.start(roomId);
+      return { gameSessionId: room.gameSessionId };
+    });
+  },
   async quickJoin(): Promise<Res> {
     if (!player()) return { ok: false, status: 0, error: "standalone" };
     try { return roomRes(await rooms.quickJoin()); } catch (e) { return errRes(e); }
@@ -289,43 +309,43 @@ export const roomsAdapter = {
     return { ok: true, status: 200, data: list.map((i) => ({ id: i.id, fromUserId: i.fromUserId, fromName: i.fromUsername })) };
   },
   leaveRoom(roomId: string): Promise<Res> { return call(() => rooms.leave(roomId)); },
-  submitRoomResult(): Promise<Res> { return Promise.resolve({ ok: true, status: 204 }); },
   profileFor(uid: string): Promise<string> { return displayName(uid); },
-  /** The room's socket: JSON messages both ways ({ send, close }), the roster as a control message. */
-  openRoomSocket(roomId: string, h: SocketHandlers): { send(msg: unknown): boolean; close(): void } {
+  /** The room's socket for the lobby: its roster (seats, status, the bound session) as control messages. */
+  openRoomSocket(roomId: string, h: RoomHandlers): { close(): void } {
     let socket: RoomSocket | null = null;
     try { socket = rooms.connect(roomId); } catch { queueMicrotask(() => h.onUnavailable?.("connect")); }
-    const decoder = new TextDecoder();
     const roster = (room: Room): void => {
       const players = [...room.participants].sort((a, b) => a.slot - b.slot).map((p) => ({
-        seat: p.slot, name: (p.userId && names.get(p.userId)) || p.username, connected: true,
+        seat: p.slot, userId: p.userId, name: (p.userId && names.get(p.userId)) || p.username, connected: true,
       }));
-      const ids = Object.fromEntries(room.participants.map((p) => [p.id, p.slot]));
-      h.onMessage?.({ control: { type: "roster", players, ids } });
+      h.onMessage?.({ control: { type: "roster", players, status: room.status, gameSessionId: room.gameSessionId } });
       // Resolve display names, then tell again.
       const unknown = room.participants.filter((p) => p.userId && !names.has(p.userId));
       if (unknown.length) void Promise.all(unknown.map((p) => displayName(p.userId!))).then(() => roster(room));
     };
     if (socket) {
       socket.on("open", () => h.onOpen?.());
-      socket.on("data", (from, payload) => {
-        try { h.onMessage?.({ from, msg: JSON.parse(decoder.decode(payload)) }); } catch { /* malformed frame */ }
-      });
       socket.on("roster", roster);
       socket.on("disconnected", () => h.onClose?.());
-      socket.on("stopped", (reason) => {
-        if (reason === "terms-required") h.onTermsRequired?.();
-        else if (reason === "signed-out") h.onAuthLost?.();
-        else if (reason !== "closed") h.onUnavailable?.(reason);
-      });
+      socket.on("stopped", (reason) => stopped(h, reason));
+    }
+    return { close(): void { try { socket?.close(); } catch { /* gone */ } socket = null; } };
+  },
+  /** The bound session's game socket: commands to server.js, its broadcasts back. */
+  openGameSocket(sessionId: string, h: GameHandlers): { send(data: unknown): boolean; close(): void } {
+    let socket: GameSocket | null = null;
+    try { socket = connectGame(sessionId); } catch { queueMicrotask(() => h.onUnavailable?.("connect")); }
+    if (socket) {
+      socket.on("open", () => h.onOpen?.());
+      socket.on("game", (data) => h.onMessage?.(data));
+      socket.on("error", (message) => h.onError?.(message));
+      socket.on("disconnected", () => h.onClose?.());
+      socket.on("stopped", (reason) => stopped(h, reason));
+      socket.on("abandoned", (reason) => h.onUnavailable?.(`abandoned:${reason}`));
     }
     return {
-      send(msg: unknown): boolean {
-        try {
-          const text = JSON.stringify(msg);
-          if (new TextEncoder().encode(text).length > 8192) return false; // 8 KB per frame
-          return !!socket && socket.state === "open" && socket.sendData(text);
-        } catch { return false; }
+      send(data: unknown): boolean {
+        try { return !!socket && socket.state === "open" && socket.sendCommand(data as JsonValue); } catch { return false; }
       },
       close(): void { try { socket?.close(); } catch { /* gone */ } socket = null; },
     };

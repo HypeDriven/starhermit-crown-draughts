@@ -512,7 +512,7 @@ export function signIn(): void {
 function onGameOver(over: Any): void {
   const config = app.session.config;
   const humanSeats = config.players.map((p: Any, i: number) => ({ ...p, seat: i })).filter((p: Any) => p.kind === "human");
-  const localMultiplayer = humanSeats.length > 1;
+  const localMultiplayer = !app.hostedClient && humanSeats.length > 1;
   const mySeat = app.hostedClient ? app.hostedClient.seat : (humanSeats[0]?.seat ?? 0);
   const iWon = localMultiplayer ? false : over.winner === mySeat;
   over.winnerName = over.winner != null ? (config.players[over.winner]?.name || `House ${over.winner + 1}`) : null;

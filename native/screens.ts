@@ -487,7 +487,7 @@ function tableRoomScreen(): void {
         para(T(p.connected ? "{name} — rating {rating}" : "{name} (away) — rating {rating}", { name: T(p.name), rating: p.rating }), iw);
       }, { width: iw, style: "mastery-row" });
     }
-    const isHost = client.seat === 0;
+    const isHost = client.isHost;
     if (isHost) { if (btn(T("Start the round"), "btn-primary")) void A.startHostedRound(); }
     else btn(T("Waiting for the host…"), "btn-primary", { disabled: true });
     if (isHost) {
