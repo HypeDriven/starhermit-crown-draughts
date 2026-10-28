@@ -15,7 +15,7 @@
     "assets/ui-style.json": {"sha256": "b003aa539d97456da8352709d702ccf77d3174c3c67573fd77ea81206fc1e316", "size": 16889},
     "cover.jpg": {"sha256": "2a689a89429ab4d484ef21c048be395833d7126ce1b32f107363b297a45ccaad", "size": 256966},
     "icon.png": {"sha256": "ea506186b6dfdd293b25d21e55c3af03d2276fbae78570287a5ff4d4cf94e2d5", "size": 7297},
-    "index.html": {"sha256": "67932a3d584bc3a3f0190c7d071a5836b9380bb45e909eb2a17a06ddb42a7684", "size": 1764},
+    "index.html": {"sha256": "4ce15f4e2f957b4cb5cf951433f67c6ef3b58efa6a00a6436ee80d742995a3ae", "size": 1764},
     "js/content/achievements.js": {"sha256": "f5396ca16eefb56c2ab2a4fad3d1beb1aa34676dcdf8608325c9c0ebf3cce660", "size": 2215},
     "js/content/baked.js": {"sha256": "41bac4a05a65e861c37dad51782048570e8002a4c90bbcf582baa117f0631e60", "size": 31674},
     "js/content/challenges.js": {"sha256": "3cecc2080dc9c91331ade4cbf3fadb4616243fdd6f96fee457fec4e25b8210fd", "size": 4394},
@@ -103,7 +103,7 @@
     "sfx/ui-toggle.opus": {"sha256": "8191d447bf21b03f164794ec1a2027d1ee008e73cfd02901d99128a86987c54f", "size": 11545},
     "sfx/undo.opus": {"sha256": "f8dc6f41babcf20fea052f70add901398582ef4b9eb4869c9a80d95b36899909", "size": 11812},
     "sfx/win.opus": {"sha256": "d56587d3ecf3be9d22efc14e6b58c4233efc9067d4704728b919e5ecded404a8", "size": 63771},
-    "starhermit.txt": {"sha256": "72851a748c40407a0ffa0d4b7c78a1ed8d5683d8b37a7dad717382725630e2c6", "size": 1979}
+    "starhermit.txt": {"sha256": "c8e06cdccb99d76c6db029cfbad4d26213e25e4a006645c1a7ee93bc8ed1287f", "size": 1979}
   },
   "excluded": ["coverart.png", "knownissues.md", "leaderboards.json", "package.json", "spec.md", "tests/", "tools/", "tsconfig.json"],
   "format": 1
