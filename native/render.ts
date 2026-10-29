@@ -23,7 +23,7 @@ import {
   ACESFilmicToneMapping, AmbientLight, BackSide, BoxGeometry, BufferAttribute, BufferGeometry, CircleGeometry, Color,
   ConeGeometry, CylinderGeometry, DataTexture, DirectionalLight, DoubleSide, SRGBColorSpace, TextureLoader, Euler, FogExp2, Group, HemisphereLight,
   IcosahedronGeometry, InstancedMesh, LatheGeometry, Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial,
-  MeshPhysicalMaterial, MeshStandardMaterial, PMREMGenerator, PerspectiveCamera, Plane, Points, PointsMaterial,
+  MeshPhysicalMaterial, MeshStandardMaterial, OrthographicCamera, PMREMGenerator, PerspectiveCamera, Plane, Points, PointsMaterial,
   Quaternion, Raycaster, RepeatWrapping, RingGeometry, RoomEnvironment, SphereGeometry, Vector2, Vector3,
   pointerToNdc, renderer, scene,
 } from "starhermit:scene";
@@ -117,9 +117,9 @@ const FRAMING = {
   distPerSize: (size: number): number => 1 + (size - 8) * 0.11,
 };
 const camera = new PerspectiveCamera(FRAMING.fov, 16 / 9, FRAMING.near, FRAMING.far);
-const sun = new DirectionalLight(0xffe7c4, 2.6 / PI);
-const hemi = new HemisphereLight(0xbdd7f0, 0x6d7c53, 0.75 / PI);
-const amb = new AmbientLight(0xffffff, 0.12 / PI);
+const sun = new DirectionalLight(0xffe7c4, 2.6);
+const hemi = new HemisphereLight(0xbdd7f0, 0x6d7c53, 0.75);
+const amb = new AmbientLight(0xffffff, 0.12);
 let sky: Mesh | null = null;
 let look: Look | null = null;
 let themeId = "royal-garden";
@@ -155,14 +155,24 @@ function buildSky(t: Theme): Mesh {
   return mesh;
 }
 
+/** Fit the sun's shadow box to the board and its terrace, as the browser build did. */
+function fitShadow(boardSize: number): void {
+  const cam = sun.shadow.camera as OrthographicCamera;
+  const ext = Math.max(11, boardSize / 2 + 6);
+  cam.left = -ext; cam.right = ext; cam.top = ext; cam.bottom = -ext; cam.near = 1; cam.far = 70;
+  cam.updateProjectionMatrix();
+  sun.target.position.set(0, 0, 0);
+}
+
 function build(): void {
   built = true;
   renderer.camera = camera;
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.12;
   sun.shadow.bias = -0.0008;
+  sun.shadow.normalBias = 0.02;
   sun.shadow.radius = 3;
-  sun.shadow.distance = 45;
+  fitShadow(8);
   scene.add(sun, sun.target, hemi, amb);
   fx = new FxPool();
 }
@@ -962,7 +972,7 @@ export function applyLook(next: Look): void {
 }
 function applyHemi(): void {
   const t = THEMES[themeId] || THEMES["royal-garden"];
-  hemi.intensity = t.hemi.intensity * (look?.reflections ? 0.85 : 1) / PI;
+  hemi.intensity = t.hemi.intensity * (look?.reflections ? 0.85 : 1);
 }
 
 export function setTheme(id: string, seed = 1, force = false): void {
@@ -976,7 +986,7 @@ export function setTheme(id: string, seed = 1, force = false): void {
   sky = buildSky(t);
   scene.add(sky);
   sun.color.set(t.sun.color);
-  sun.intensity = t.sun.intensity / PI;
+  sun.intensity = t.sun.intensity;
   sun.position.set(t.sun.position[0], t.sun.position[1], t.sun.position[2]);
   hemi.color.set(t.hemi.sky);
   hemi.groundColor.set(t.hemi.ground);
@@ -1015,6 +1025,7 @@ export function loadState(state: State, { snap = true } = {}): void {
   board.buildFor(state);
   boardKey = key;
   rig.size = state.size;
+  fitShadow(state.size);
   rig.goTo(rig.preset, snap);
 }
 
