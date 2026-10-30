@@ -957,12 +957,12 @@ export function applyLook(next: Look): void {
     denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
   };
   // HDR threshold: only lanterns, torches and glints on gold crowns and polished stone bloom.
-  // minor 29 bloom follows r185's UnrealBloomPass; this page ran three r180 (r177+), so its strength is kept.
+  // r185 bloom (the default model); this page ran three r180 (r177+), so its strength is kept.
   renderer.bloom = next.bloom ? { strength: 0.5, radius: 0.45, threshold: 2.4, resolution: next.budget.bloomRes } : null;
   // The grade ShaderPass after OutputPass: gentle S-curve, a touch more
   // saturation, warm highlights / cool shadows, a soft vignette.
   renderer.grade = next.grade ? {
-    space: "display", contrast: 0.09, saturation: 1.07,
+    space: "display", contrastCurve: "s", contrast: 0.18, saturation: 1.07, // the page's S-curve after OutputPass
     shadows: [0.97, 0.99, 1.04], highlights: [1.035, 1.0, 0.965], split: [0.2, 0.8],
     vignette: { amount: 0.2, inner: 0.38, outer: 0.85 },
   } : null;
