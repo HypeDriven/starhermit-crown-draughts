@@ -945,7 +945,8 @@ export function applyLook(next: Look): void {
   if (shadows) sun.shadow.mapSize = next.shadows;
   if (next.reflections && !envTex) {
     const pmrem = new PMREMGenerator(renderer);
-    envTex = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+    const room = new RoomEnvironment(renderer); room.position.y = 0; // the page's three (pre-r183) builds the room at the origin
+    envTex = pmrem.fromScene(room, 0.04).texture;
   }
   // The garden gets a faint wash; the board and pieces bind the map with their own strengths.
   scene.environment = next.reflections ? envTex : null;
