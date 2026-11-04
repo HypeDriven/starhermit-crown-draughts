@@ -1,0 +1,37 @@
+# Tier bench (tools/engine-tier-bench.mjs): Practice against the Novice as
+# practice.play does (its fixed moves), measured over the garden terrace:
+# the 3D board and pieces, the move, the opponent's reply, drifting petals.
+until 600 Crown Draughts
+frames 20
+click No thanks
+frames 5
+click =Play
+frames 10
+click =Practice
+until 120 Take your seat
+frames 10
+click =Novice (800)
+frames 5
+key Tab 1
+frames 3
+key Tab 1
+frames 3
+key Tab 1
+frames 3
+key Enter 1
+until 300 to move — you
+frames 120
+measure start
+key KeyS 1
+frames 5
+key KeyS 1
+frames 5
+key Enter 1
+frames 10
+key KeyS 1
+frames 5
+key KeyD 1
+frames 5
+key Enter 1
+frames 560
+measure stop

@@ -5,7 +5,7 @@
 // unchanged in behaviour; the screens and HUD are starhermit:ui
 // (screens.ts), the garden and board starhermit:scene (render.ts), the
 // controller app.ts and game.ts, saves and the platform platform.ts.
-import { frame, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences } from "starhermit:engine";
+import { frame, levelSettings, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences } from "starhermit:engine";
 import { onAction, onPointerButton, onPointerMove, onTouch } from "starhermit:input";
 import { onSessionEnded } from "starhermit:platform";
 import * as ui from "starhermit:ui";
@@ -136,11 +136,11 @@ function handlePointer(): void {
 
 // ------------------------------------------------------------------ frame
 let lookKey = "";
+let look = lookFor(levelSettings("molecular"));
 onUpdate((dt) => {
   const f = frame();
-  const look = lookFor(f.quality, f.levelIndex);
-  const key = `${f.quality}:${f.levelIndex}`;
-  if (key !== lookKey) { lookKey = key; setHudBlur(look.budget.hudBlur); }
+  const key = f.level;
+  if (key !== lookKey) { lookKey = key; look = lookFor(levelSettings(f.level)); setHudBlur(look.budget.hudBlur); }
   render.applyLook(look);
   audio.poll(dt);
   A.tick();

@@ -41,7 +41,7 @@ type Polish = { clearcoat?: number; clearcoatRoughness?: number; bump?: number; 
 const PI = Math.PI;
 
 // ------------------------------------------------------------------ budget and materials
-let budget: Budget = { material: "physical", texture: 256, pieceSegs: 40, crownSegs: 28, tufts: 420, ambient: 140, bloomRes: 0.5, aoRes: 0.5, hudBlur: false };
+let budget: Budget = { material: "physical", texture: 256, pieceSegs: 40, crownSegs: 28, tufts: 420, ambient: 140, hudBlur: false };
 const polish = new WeakMap<object, Polish>();
 
 /** Lit material in the budget's class (Lambert on Low, Standard on Balanced,
@@ -942,7 +942,7 @@ export function applyLook(next: Look): void {
   const shadows = next.shadows > 0;
   renderer.shadowMap.enabled = shadows;
   sun.castShadow = shadows;
-  if (shadows) sun.shadow.mapSize = next.shadows;
+  if (shadows) sun.shadow.mapSize = next.shadows; // the level's size: at minor 23+ the engine keeps the game's mapSize
   if (next.reflections && !envTex) {
     const pmrem = new PMREMGenerator(renderer);
     const room = new RoomEnvironment(renderer); room.position.y = 0; // the page's three (pre-r183) builds the room at the origin
@@ -952,14 +952,15 @@ export function applyLook(next: Look): void {
   scene.environment = next.reflections ? envTex : null;
   scene.environmentIntensity = 0.22;
   fx?.setTier(next.particles === "high");
-  renderer.ao = next.ao === "off" ? null : {
-    blendIntensity: 0.75, radius: 0.45, distanceExponent: 1.6, thickness: 1.0, scale: 1.0, samples: next.ao === "high" ? 16 : 8,
-    resolution: next.budget.aoRes,
-    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: next.ao === "high" ? 6 : 4, rings: 2, samples: next.ao === "high" ? 16 : 8, radiusExponent: 2 },
+  const ao = next.ao, fullAo = !!ao && ao.resolution >= 1; // the engine's "high" AO: full resolution
+  renderer.ao = ao && {
+    blendIntensity: 0.75, radius: 0.45, distanceExponent: 1.6, thickness: 1.0, scale: 1.0, samples: ao.samples,
+    resolution: ao.resolution,
+    denoise: { lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: fullAo ? 6 : 4, rings: 2, samples: ao.denoiseSamples, radiusExponent: 2 },
   };
   // HDR threshold: only lanterns, torches and glints on gold crowns and polished stone bloom.
   // r185 bloom (the default model); this page ran three r180 (r177+), so its strength is kept.
-  renderer.bloom = next.bloom ? { strength: 0.5, radius: 0.45, threshold: 2.4, resolution: next.budget.bloomRes } : null;
+  renderer.bloom = next.bloom === null ? null : { strength: 0.5, radius: 0.45, threshold: 2.4, resolution: next.bloom };
   // The grade ShaderPass after OutputPass: gentle S-curve, a touch more
   // saturation, warm highlights / cool shadows, a soft vignette.
   renderer.grade = next.grade ? {
