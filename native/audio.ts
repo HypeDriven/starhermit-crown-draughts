@@ -13,9 +13,10 @@
 // engine's browser runtime drops clip loads while a graph changes; see the
 // arrow-exodus port). For the same reason the browser build's synthesized
 // stand-ins for clips still loading (and its synthesized wind, birds and
-// fountain under the authored bed) are not ported: clips load once the mixer
-// runs (natively at once, in a browser after the first press) and a cue
-// before that is silent; every cue has a visual or announced twin. The
+// fountain under the authored bed) are not ported: every clip loads at once
+// in onStart (every loaded clip reaches the mixer, natively and on the web)
+// and a cue whose clip is still loading is silent; every cue has a visual or
+// announced twin. The
 // spoken turn announcements (the device's speech voice) are the screen
 // reader's now (ui.announce).
 import { context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type Sound } from "starhermit:audio";
@@ -44,20 +45,11 @@ const EFFECTS = 0.9, MUSIC = 0.7, AMBIENCE = 0.6 * 0.35;
 
 let muted = false;
 const clips = new Map<string, AudioClip>();
-const loading = new Set<string>();
-const queue: string[] = [];
-let wantClips = false;
-function load(file: string): void {
-  if (clips.has(file) || loading.has(file)) return;
-  loading.add(file);
-  loadClip(`sfx/${file}.opus`).then((c) => { clips.set(file, c); }, (e: unknown) => console.warn(`sfx ${file}: ${String(e)}`))
-    .finally(() => loading.delete(file));
-}
-/** Loads every clip once the mixer runs (a few a frame). */
+/** Loads every clip at once (onStart); a cue whose clip is still loading is skipped. */
 export function loadSfx(): void {
-  if (wantClips) return;
-  wantClips = true;
-  queue.push(...new Set([...Object.values(BEDS), ...Object.values(SAMPLES)]));
+  for (const file of new Set([...Object.values(BEDS), ...Object.values(SAMPLES)])) {
+    loadClip(`sfx/${file}.opus`).then((c) => { clips.set(file, c); }, (e: unknown) => console.warn(`sfx ${file}: ${String(e)}`));
+  }
 }
 
 /** Plays a logical event's cue (the browser build's audio.<event>()). */
@@ -68,7 +60,7 @@ export function play(event: string): void {
   if (!clip) return;
   const bus: Bus = INTERFACE.has(event) ? "interface" : MUSIC_CUES.has(event) ? "music" : "effects";
   try { playClip(clip, { bus, gain: bus === "music" ? MUSIC : EFFECTS }); }
-  catch { clips.delete(file!); load(file!); } // a clip the mixer lost: load it again
+  catch { /* the mixer is full this frame: skip it */ }
 }
 
 export function setMuted(v: boolean): void {
@@ -117,12 +109,10 @@ export function startMusic(theme: { music?: { root: number; tempo: number } } | 
 }
 export function stopMusic(): void { music = null; }
 
-/** Called each frame with its seconds: loads what waited for the mixer, the bed, the pad. */
+/** Called each frame with its seconds: once the mixer runs, the bed and the pad. */
 export function poll(dt: number): void {
   clock += dt;
-  if (context.state !== "running") return;
-  // A few clip loads a frame (one at a time is kindest to the web mixer).
-  if (queue.length && loading.size < 2) load(queue.shift()!);
+  if (context.state !== "running") return; // starting the bed and the pad still waits for the mixer
   if (!muted && wantBed && (!bed || bed.theme !== wantBed)) {
     const clip = clips.get(BEDS[wantBed] || "");
     if (clip) {

@@ -49,23 +49,11 @@ function btn(label: string, cls: string | false = false, opts: ui.ButtonOptions 
 function lbl(text: string, cls = "text"): void { ui.style(cls).label(text); }
 function para(text: string, width: number, cls = "text"): void { ui.style(cls).paragraph(text, Math.max(40, width)); }
 function heading(text: string, cls = "h2"): void { ui.style(cls).heading(text); }
-/** Wraps buttons into rows that fit `width` (rows do not flex-wrap). */
+/** Buttons in rows that wrap at `width` (CSS flex-wrap). */
 function buttonRows(id: string, items: { label: string; cls?: string | false; opts?: ui.ButtonOptions; run: () => void }[], width: number, justify: ui.Align = "start"): void {
-  const gap = 8;
-  const rows: typeof items[] = [];
-  let cur: typeof items = [], used = 0;
-  for (const it of items) {
-    const w = ui.measureText(it.label, { kind: "button", style: ["btn", ...(it.cls ? [it.cls] : [])] }).width / SCALE;
-    if (cur.length && used + gap + w > width) { rows.push(cur); cur = []; used = 0; }
-    used += (cur.length ? gap : 0) + w;
-    cur.push(it);
-  }
-  if (cur.length) rows.push(cur);
-  ui.column(`${id}-rows`, () => {
-    rows.forEach((row, ri) => ui.row(`${id}-r${ri}`, () => {
-      for (const it of row) if (btn(it.label, it.cls ?? false, it.opts)) it.run();
-    }, { spacing: gap, justify, width }));
-  }, { spacing: gap, width });
+  ui.row(id, () => {
+    for (const it of items) if (btn(it.label, it.cls ?? false, it.opts)) it.run();
+  }, { wrap: true, width, gap: 8, justify });
 }
 
 // Content heights from last frame (vertical centring of short screens).
