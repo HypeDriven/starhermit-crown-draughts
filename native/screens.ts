@@ -17,8 +17,7 @@ import { MASTERY_TRACK, nextMilestone } from "../js/content/themes.js";
 import { ACHIEVEMENTS } from "../js/content/achievements.js";
 import { msUntilNextDaily } from "../js/content/daily.js";
 import { ACTIONS } from "../js/ui/actions.js";
-import { platformStrings, pfmt } from "../js/ui/platform-i18n.js";
-import { N, T } from "./i18n.ts";
+import { N, P, SH, T } from "./i18n.ts";
 import * as audio from "./audio.ts";
 import * as platform from "./platform.ts";
 import * as A from "./app.ts";
@@ -26,16 +25,14 @@ import { app } from "./app.ts";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
-const PT = (): Record<string, string> => platformStrings();
 
 // ------------------------------------------------------------------ viewport and helpers
 let VW = 1280, VH = 720, SCALE = 1;
 function measureViewport(): void {
-  const f = frame();
-  SCALE = ui.preferences().scale || 1;
-  const sa = f.safeArea;
-  VW = Math.max(1, (f.width - sa.left - sa.right) / SCALE);
-  VH = Math.max(1, (f.height - sa.top - sa.bottom) / SCALE);
+  const v = ui.viewport!();
+  SCALE = v.scale || 1;
+  VW = Math.max(1, v.width);
+  VH = Math.max(1, v.height);
 }
 const compact = (): boolean => VW < 1024 || (VH < 560 && VW > VH);
 const phone = (): boolean => VW < 760 && VH > VW;
@@ -167,12 +164,11 @@ function titleScreen(): void {
         { label: T("Settings"), cls: "btn-dark", run: () => A.openModal({ kind: "settings", tab: 0 }) },
         { label: T("Help"), cls: "btn-dark", run: () => A.openModal({ kind: "help" }) },
       ], w, "center");
-      const P = PT();
       if (!platform.signedIn()) {
-        buttonRows("title-signin", [{ label: P.signIn!, cls: "btn-ghost", run: () => A.signIn() }], w, "center");
+        buttonRows("title-signin", [{ label: SH("signIn"), cls: "btn-ghost", run: () => A.signIn() }], w, "center");
       } else {
-        ui.style("note", { text: { align: "center" } }).paragraph(pfmt(P.playingAs, { name: app.profile.name }), w);
-        if (platform.inviteLink()) buttonRows("title-invite", [{ label: P.invite!, cls: "btn-ghost", run: () => A.copyInviteLink() }], w, "center");
+        ui.style("note", { text: { align: "center" } }).paragraph(P("playingAs", { name: app.profile.name }), w);
+        if (platform.inviteLink()) buttonRows("title-invite", [{ label: SH("invite"), cls: "btn-ghost", run: () => A.copyInviteLink() }], w, "center");
       }
     }, { spacing: 10, width: w, align: "center", padding: { top: 14 } });
   });
@@ -449,15 +445,14 @@ function lobbyScreen(): void {
     heading(T("Join a table"), "h3");
     actionsRow("join", iw, [{ label: T("Join an open table"), cls: "btn-primary", run: () => { void A.quickJoinTable(); } }]);
     para(T("Open tables fill instantly. Private tables arrive as friend invites — there are no join codes on the platform."), iw, "note");
-    const P = PT();
-    heading(P.tableInvites!, "h3");
+    heading(P("tableInvites"), "h3");
     if (app.invites === null) lbl("…", "note");
-    else if (!app.invites.length) lbl(P.noInvites!, "note");
+    else if (!app.invites.length) lbl(P("noInvites"), "note");
     else for (const inv of app.invites) {
       ui.row(`inv-${inv.id}`, () => {
-        lbl(pfmt(P.from, { name: inv.name }));
+        lbl(P("from", { name: inv.name }));
         ui.spacer();
-        if (ui.id(`join-${inv.id}`).style("btn", "btn-primary").button(P.join!)) void A.acceptTableInvite(inv.id);
+        if (ui.id(`join-${inv.id}`).style("btn", "btn-primary").button(P("join"))) void A.acceptTableInvite(inv.id);
       }, { width: iw, align: "center", spacing: 8 });
     }
     actionsRow("lobby-back", iw, [{ label: T("Back"), cls: "btn-ghost", run: () => A.go("modes") }]);
@@ -479,15 +474,14 @@ function tableRoomScreen(): void {
     if (isHost) { if (btn(T("Start the round"), "btn-primary")) void A.startHostedRound(); }
     else btn(T("Waiting for the host…"), "btn-primary", { disabled: true });
     if (isHost) {
-      const P = PT();
-      heading(P.inviteFriends!, "h3");
+      heading(P("inviteFriends"), "h3");
       if (app.friends === null) lbl("…", "note");
-      else if (!app.friends.length) lbl(P.noFriends!, "note");
+      else if (!app.friends.length) lbl(P("noFriends"), "note");
       else for (const f of app.friends) {
         ui.row(`friend-${f.userId}`, () => {
-          lbl(`${f.name} · ${f.online ? P.online : P.offline}`);
+          lbl(`${f.name} · ${f.online ? P("online") : P("offline")}`);
           ui.spacer();
-          if (ui.id(`invite-${f.userId}`).style("btn", "btn-small").button(f.invited ? P.invited! : P.sendInvite!, { disabled: !!f.invited || !!f.busy })) void A.inviteFriend(f);
+          if (ui.id(`invite-${f.userId}`).style("btn", "btn-small").button(f.invited ? P("invited") : P("sendInvite"), { disabled: !!f.invited || !!f.busy })) void A.inviteFriend(f);
         }, { width: iw, align: "center", spacing: 8 });
       }
     }
@@ -866,11 +860,10 @@ function confirmModal(m: Extract<A.Modal, { kind: "confirm" }>): void {
 }
 
 function expiredModal(m: Extract<A.Modal, { kind: "expired" }>): void {
-  const P = PT();
-  card("expired", m.terms ? P.termsTitle! : P.expiredTitle!, 460, (w) => para(m.terms ? P.termsBody! : P.expiredBody!, w), (w) => {
+  card("expired", m.terms ? P("termsTitle") : P("expiredTitle"), 460, (w) => para(m.terms ? P("termsBody") : P("expiredBody"), w), (w) => {
     buttonRows("expired-actions", [
-      { label: P.keepPlaying!, cls: "btn-ghost", run: () => A.closeModal() },
-      { label: P.signIn!, cls: "btn-primary", run: () => { A.closeModal(); A.signIn(); } },
+      { label: P("keepPlaying"), cls: "btn-ghost", run: () => A.closeModal() },
+      { label: SH("signIn"), cls: "btn-primary", run: () => { A.closeModal(); A.signIn(); } },
     ], w, "end");
   });
 }

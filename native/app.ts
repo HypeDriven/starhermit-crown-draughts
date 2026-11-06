@@ -15,8 +15,7 @@ import { dailyDefinition, utcDateKey } from "../js/content/daily.js";
 import { contentSetup, JOURNEY_STAGES } from "../js/content/index.js";
 import { playerStats } from "../js/rules/engine.js";
 import { AI_LEVELS, RULESETS, THEMES, lessonById } from "./data.ts";
-import { platformStrings, pfmt } from "../js/ui/platform-i18n.js";
-import { N, T } from "./i18n.ts";
+import { N, P, SH, T } from "./i18n.ts";
 import { GameController, type GameHost } from "./game.ts";
 import * as render from "./render.ts";
 import * as audio from "./audio.ts";
@@ -35,13 +34,14 @@ export type Modal =
   | { kind: "help" }
   | { kind: "confirm"; title: string; body?: string; confirmLabel: string; danger?: boolean; resolve: (ok: boolean) => void }
   | { kind: "expired"; terms: boolean };
-export type Toast = { text: string; kind: string; until: number };
 export type LogEntry = { text: string; render: (() => string) | null };
 
 /** The game clock in milliseconds (pauses while suspended, advances in checks). */
+export type Toast = { text: string; kind: string; until: number };
 export const nowMs = (): number => frame().time * 1000;
 
 export const app = {
+  toasts: [] as Toast[],
   settings: platform.loadSettings() as Any,
   profile: platform.loadProfile(),
   screen: "title" as Screen,
@@ -56,7 +56,6 @@ export const app = {
   lastConfig: null as Any,
   lessonRun: null as { lesson: Any; stepIndex: number } | null,
   dailyDef: null as Any,
-  toasts: [] as Toast[],
   log: [] as LogEntry[],
   chat: [] as { name: string; text: string }[],
   chatDraft: "",
@@ -79,7 +78,6 @@ export const app = {
   scrollTop: 0,
 };
 
-const PT = (): Record<string, string> => platformStrings();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const HostedSessionClient = HostedJs as any;
 
@@ -466,7 +464,7 @@ export async function inviteFriend(f: { userId: string; invited?: boolean; busy?
   const r = await platform.roomsAdapter.inviteToRoom(app.hostedClient.roomId, f.userId);
   f.busy = false;
   if (r.ok) f.invited = true;
-  else toast(PT().inviteFailed!, "warn");
+  else toast(P("inviteFailed"), "warn");
 }
 export async function startHostedRound(): Promise<void> {
   const res = await app.hostedClient?.startGame();
@@ -505,7 +503,7 @@ export function showSessionExpired(terms: boolean): void {
   openModal({ kind: "expired", terms });
 }
 export function signIn(): void {
-  requestSignIn().then(() => { syncAccount(); }, () => toast(PT().relaunchFailed!, "warn", 5000));
+  requestSignIn().then(() => { syncAccount(); }, () => toast(P("relaunchFailed"), "warn", 5000));
 }
 
 // --- the round's end and the results ------------------------------------------------------------
@@ -576,9 +574,8 @@ export function leaderboardLine(): string | null {
   if (!r || !platform.signedIn()) return null;
   const solo = r.config.mode !== "hosted" && r.config.mode !== "lesson" && !r.outcome.localMultiplayer;
   if (!solo) return null;
-  const P = PT();
   const lb = app.lbResult;
-  return !lb ? (app.lbPending ? P.lbPosting! : P.lbNotPosted!) : !lb.posted ? P.lbNotPosted! : lb.rank ? pfmt(P.lbRank, { rank: lb.rank }) : P.lbPosted!;
+  return !lb ? (app.lbPending ? SH("leaderboardPosting") : SH("leaderboardNotPosted")) : !lb.posted ? SH("leaderboardNotPosted") : lb.rank ? SH("leaderboardRank", { rank: lb.rank }) : SH("leaderboardPosted");
 }
 
 export function retryLast(): void {
@@ -682,10 +679,9 @@ export function attractBoard(): void {
 }
 
 export function copyInviteLink(): void {
-  const P = PT();
   const link = platform.inviteLink();
   if (!link) return;
-  try { clipboard.writeText(link); toast(P.copied!, "ok"); } catch { toast(pfmt(P.copyFail, { link }), "info", 6000); }
+  try { clipboard.writeText(link); toast(SH("inviteCopied"), "ok"); } catch { toast(SH("inviteLink", { link }), "info", 6000); }
 }
 
 export function consentAnswer(consent: boolean): void {

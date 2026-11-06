@@ -10,8 +10,7 @@ import { onAction, onPointerButton, onPointerMove, onTouch } from "starhermit:in
 import { onSessionEnded } from "starhermit:platform";
 import * as ui from "starhermit:ui";
 import { setSessionClock } from "../js/core/session.js";
-import { initLanguage } from "./i18n.ts";
-import { platformStrings } from "../js/ui/platform-i18n.js";
+import { initLanguage, SH } from "./i18n.ts";
 import * as render from "./render.ts";
 import * as audio from "./audio.ts";
 import * as platform from "./platform.ts";
@@ -41,7 +40,7 @@ onStart(() => {
   });
   platform.onAccountChange(() => A.syncAccount());
   onSessionEnded((reason) => {
-    if (reason === "signed-out") A.toast(platformStrings().signedOut!, "warn", 4000);
+    if (reason === "signed-out") A.toast(SH("signedOut"), "warn", 4000);
     else A.showSessionExpired(reason === "terms-required");
   });
   onPreferencesChange((p) => render.setReducedMotion(p.reducedMotion));

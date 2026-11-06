@@ -3,23 +3,21 @@
 // logical event, the theme's authored ambience bed and the generative music
 // pad. The runtime's Options › Audio owns the volumes, mute and voice limit
 // (the browser build's Music / Effects / Ambience / Voice sliders and its
-// game-options.js sound panel); the M key still silences the game's own
-// sound (settings.muted). Event cues play on "effects", interface clicks on
+// game-options.js sound panel); the M key silences the game through the
+// engine's game-level mute (setMuted; settings.muted keeps it saved). Event cues play on "effects", interface clicks on
 // "interface", the fanfares, the pad and the bed on "music", each at the
 // level the browser build's default bus volume gave it.
 //
-// The pad's chords are rendered once into clips (createClip) with the same
-// detuned sines and envelopes rather than run as a live synthesis graph (the
-// engine's browser runtime drops clip loads while a graph changes; see the
-// arrow-exodus port). For the same reason the browser build's synthesized
-// stand-ins for clips still loading (and its synthesized wind, birds and
+// The pad's chords are rendered once into clips by the engine
+// (OfflineAudioContext): the same detuned sines and envelopes. The browser
+// build's synthesized stand-ins for clips still loading (and its synthesized wind, birds and
 // fountain under the authored bed) are not ported: every clip loads at once
 // in onStart (every loaded clip reaches the mixer, natively and on the web)
 // and a cue whose clip is still loading is silent; every cue has a visual or
 // announced twin. The
 // spoken turn announcements (the device's speech voice) are the screen
 // reader's now (ui.announce).
-import { context, createClip, loadClip, play as playClip, type AudioClip, type Bus, type Sound } from "starhermit:audio";
+import { context, createClip, loadClip, OfflineAudioContext, play as playClip, setMuted as setGameMuted, type AudioClip, type Bus, type Sound } from "starhermit:audio";
 
 /** Logical event → authored clip (the browser build's event map). */
 const SAMPLES: Record<string, string> = {
@@ -43,7 +41,6 @@ const BEDS: Record<string, string> = {
 // The browser build's default bus volumes: music 0.7, effects 0.9, ambience 0.6 (the bed at 0.35).
 const EFFECTS = 0.9, MUSIC = 0.7, AMBIENCE = 0.6 * 0.35;
 
-let muted = false;
 const clips = new Map<string, AudioClip>();
 /** Loads every clip at once (onStart); a cue whose clip is still loading is skipped. */
 export function loadSfx(): void {
@@ -54,7 +51,6 @@ export function loadSfx(): void {
 
 /** Plays a logical event's cue (the browser build's audio.<event>()). */
 export function play(event: string): void {
-  if (muted) return;
   const file = SAMPLES[event];
   const clip = file ? clips.get(file) : undefined;
   if (!clip) return;
@@ -63,10 +59,7 @@ export function play(event: string): void {
   catch { /* the mixer is full this frame: skip it */ }
 }
 
-export function setMuted(v: boolean): void {
-  muted = v;
-  if (v) { stopBed(); }
-}
+export function setMuted(v: boolean): void { setGameMuted(v); }
 
 // -- the ambience bed ---------------------------------------------------------------------
 let bed: { theme: string; sound: Sound | null } | null = null;
@@ -83,28 +76,40 @@ const RATE = 8000;
 const CHORDS = [[0, 4, 7], [5, 9, 12], [7, 11, 14], [2, 5, 9]];
 /** One pad chord: each tone two detuned sines (−4 and +3 cents), up over
  * 2.2 s to 0.028 and down to silence at 7.5 s (the browser build's envelope). */
-function chordClip(root: number, chord: number[]): AudioClip {
-  const n = Math.round(8 * RATE);
-  const out = new Float32Array(n);
-  const up = 2.2 * RATE, end = 7.5 * RATE;
+async function renderChord(root: number, chord: number[]): Promise<AudioClip> {
+  const off = new OfflineAudioContext(1, Math.round(8 * RATE), RATE);
+  const env = off.createGain();
+  env.gain.setValueAtTime(0, 0);
+  env.gain.linearRampToValueAtTime(0.028, 2.2);
+  env.gain.linearRampToValueAtTime(0, 7.5);
+  env.connect(off.destination);
   for (const semi of chord) {
     const f = root * Math.pow(2, semi / 12);
     for (const det of [-4, 3]) {
-      const w = 2 * Math.PI * f * Math.pow(2, det / 1200) / RATE;
-      for (let i = 0; i < n; i++) {
-        const env = i < up ? (i / up) * 0.028 : i < end ? 0.028 * (1 - (i - up) / (end - up)) : 0;
-        if (env > 0) out[i] = out[i]! + Math.sin(w * i) * env;
-      }
+      const osc = off.createOscillator();
+      osc.frequency.value = f * Math.pow(2, det / 1200);
+      osc.connect(env);
+      osc.start();
     }
   }
-  return createClip([out], RATE);
+  return createClip(await off.startRendering());
 }
 let music: { root: number; tempo: number; step: number; next: number } | null = null;
 const chordCache = new Map<string, AudioClip>();
+const chordsAsked = new Set<number>();
+/** Renders a root's four chords once; the pad waits for each clip. */
+function renderChords(root: number): void {
+  if (chordsAsked.has(root)) return;
+  chordsAsked.add(root);
+  CHORDS.forEach((chord, c) => {
+    renderChord(root, chord).then((clip) => { chordCache.set(`${root}:${c}`, clip); }, (e: unknown) => console.warn(`pad: ${String(e)}`));
+  });
+}
 let clock = 0;
 export function startMusic(theme: { music?: { root: number; tempo: number } } | null | undefined): void {
   const m = theme?.music || { root: 220, tempo: 0.1 };
   if (music && music.root === m.root && music.tempo === m.tempo) return;
+  renderChords(m.root);
   music = { root: m.root, tempo: m.tempo, step: 0, next: clock };
 }
 export function stopMusic(): void { music = null; }
@@ -113,7 +118,7 @@ export function stopMusic(): void { music = null; }
 export function poll(dt: number): void {
   clock += dt;
   if (context.state !== "running") return; // starting the bed and the pad still waits for the mixer
-  if (!muted && wantBed && (!bed || bed.theme !== wantBed)) {
+  if (wantBed && (!bed || bed.theme !== wantBed)) {
     const clip = clips.get(BEDS[wantBed] || "");
     if (clip) {
       stopBed();
@@ -122,11 +127,10 @@ export function poll(dt: number): void {
       return;
     }
   }
-  if (music && !muted && clock >= music.next) {
+  if (music && clock >= music.next) {
     const c = music.step % CHORDS.length;
-    const key = `${music.root}:${c}`;
-    let clip = chordCache.get(key);
-    if (!clip) { clip = chordClip(music.root, CHORDS[c]!); chordCache.set(key, clip); return; } // rendered this frame, played next
+    const clip = chordCache.get(`${music.root}:${c}`);
+    if (!clip) return; // still rendering
     music.step++;
     music.next = clock + 6 / Math.max(0.05, music.tempo * 10);
     try { playClip(clip, { bus: "music", gain: MUSIC }); } catch { /* the mixer is full */ }

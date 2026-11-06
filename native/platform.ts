@@ -24,7 +24,7 @@
 import type { JsonValue } from "starhermit:engine";
 import {
   connectGame, friends, inviteLink as fetchInviteLink, leaderboards, onPlayerChange, player, profile as fetchProfile,
-  rooms, serverNow, sessions, type GameSocket, type Leaderboard, type Room, type RoomSocket,
+  rooms, serverNow, type GameSocket, type Room, type RoomSocket,
 } from "starhermit:platform";
 import { saves, settings, storage } from "starhermit:storage";
 import {
@@ -150,7 +150,7 @@ function refreshInvite(): void {
 export function inviteLink(): string | null { return player() ? invite : null; }
 const playerListeners = new Set<() => void>();
 export function onAccountChange(fn: () => void): void { playerListeners.add(fn); }
-onPlayerChange(() => { refreshInvite(); board = null; for (const fn of playerListeners) fn(); });
+onPlayerChange(() => { refreshInvite(); for (const fn of playerListeners) fn(); });
 
 /** The platform's time (daily courts must not follow the device clock), else the device's. */
 export function nowMs(): number {
@@ -172,51 +172,13 @@ export async function displayName(id: string): Promise<string> {
 }
 
 // --- leaderboard -------------------------------------------------------------------------------
-let board: Leaderboard | null = null;
-async function highScoreBoard(): Promise<Leaderboard | null> {
-  if (board) return board;
-  const list = await leaderboards.list();
-  board = list.find((b) => b.key === "high-score") ?? null;
-  return board;
-}
-
 /** Posts a finished round's total through server.js (its score posting); whether it was
  * taken and the player's rank (null past the first 100). Never rejects. */
 export async function submitScore(points: number): Promise<{ posted: boolean; rank: number | null }> {
-  const me = player();
-  if (!me) return { posted: false, rank: null };
-  let accepted: string[] = [];
   try {
-    const sessionId = await sessions.practice();
-    accepted = await new Promise<string[]>((resolve) => {
-      const socket = connectGame(sessionId);
-      let done = false;
-      const finish = (list: string[]): void => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        socket.close();
-        resolve(list);
-      };
-      const timer = setTimeout(() => finish([]), 15000);
-      socket.on("open", () => { socket.sendCommand({ type: "result", scores: { "high-score": points } }); });
-      socket.on("game", (data) => {
-        const d = data as { type?: string; accepted?: string[] } | null;
-        if (d && d.type === "result-ack") finish(Array.isArray(d.accepted) ? d.accepted : []);
-      });
-      socket.on("error", () => finish([]));
-      socket.on("stopped", () => finish([]));
-      socket.on("abandoned", () => finish([]));
-    });
+    const r = await leaderboards.submitScore("high-score", points);
+    return { posted: r.accepted, rank: r.rank };
   } catch { return { posted: false, rank: null }; }
-  if (!accepted.includes("high-score")) return { posted: false, rank: null };
-  try {
-    const b = await highScoreBoard();
-    if (!b) return { posted: true, rank: null };
-    const page = await leaderboards.entries(b.id, { pageSize: 100 });
-    const mine = page.items.find((e) => e.userId === me.userId);
-    return { posted: true, rank: mine ? mine.rank : null };
-  } catch { return { posted: true, rank: null }; }
 }
 
 // --- hosted tables: realtime rooms -----------------------------------------------------------------

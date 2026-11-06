@@ -16,7 +16,7 @@
 | `native/quality.ts` | The level's engine effects (`levelSettings()`) plus the browser build's art presets and 60 FPS budgets keyed by the level's quality tier. |
 | `native/audio.ts` | Authored clips per event on the engine mixer, the theme's ambience bed, the generative pad rendered into clips. |
 | `native/platform.ts` | Saves (`saves`), the game's options and profile (`settings`), the round in progress (`storage`), the platform clock, the leaderboard through `server.js`, and `roomsAdapter` (realtime rooms, the room's bound session and its game socket for `js/core/hosted.js`). |
-| `native/i18n.ts`, `native/style.ts`, `native/data.ts` | The runtime's interface language → `js/i18n`; the converted style sheet, theme and palettes; the shared JS tables as loose types. |
+| `native/i18n.ts`, `native/style.ts`, `native/data.ts` | The engine's string tables and interface language; the converted style sheet, theme and palettes; the shared JS tables as loose types. |
 | `js/rules/engine.js` | Pure rules: rulesets, move generation, validation, `apply`/`applyInPlace`/`undoInPlace`, serialization, migration, hashing, scoring, Elo, announcements. |
 | `js/rules/ai.js` | Deterministic negamax with quiescence, four named levels, `hintAction`. |
 | `js/rules/rng.js` | mulberry32 PRNG, FNV-1a hashing, `seedFromString`, forkable `createRng`. |
@@ -25,7 +25,6 @@
 | `js/core/storage.js` | Pure save shapes: the game's options, profile and progress defaults, the browser build's cloud-save reader and legacy settings mapping. |
 | `js/core/progress.js` | Folds a finished round into progress (stars, streaks, records, rating, mastery, achievements); `mergeProgress` for two devices. |
 | `js/content/*.js` | Journey stages, challenges, lessons, daily definition, themes and cosmetics, achievements, validators, `baked.js` (pre-validated layouts). |
-| `js/i18n/` | `index.js` (`T`, `N`, `setLocale`, `onLanguage`) and `locales/*.js` (every player-facing string, keyed by its US-English text); `js/ui/platform-i18n.js` the StarHermit strings; `js/ui/actions.js` the input actions' help labels. |
 | `server.js` | The one platform script (`server=server.js`, Jint, no imports): referees hosted tables (room-bound sessions) and posts solo totals for practice sessions (§11). Its `RULES` block is `js/rules/{rng,engine,ai}.js`, written by `node tools/build-server.mjs` (re-run after any rules change; a test fails while it is stale). |
 | `leaderboards.json` | The game's boards (`high-score`, `hosted-wins`) for `~/games/tools/leaderboards.mjs`; the same JSON as `server.js`'s `BOARDS`. |
 | `index.html`, `starhermit-files.json` | The engine's web loader and file index, written by `npm run package` (never edited by hand). |
@@ -202,7 +201,7 @@ overlays: pause · settings · profile · help · confirm dialogs · session exp
 
 | Budget | Low | Balanced | High | Ultra |
 |---|---|---|---|---|
-| Shadows / AO / bloom / grade / antialias | off / off / off / off / MSAA (kept where the level has none; see `native/quality.ts`) | 1024 / off / ½ res / on / FXAA | 2048 / ½ res, 8 samples / ½ res / on / SMAA | 4096 / full res, 16 samples / full res / on / MSAA |
+| Shadows / AO / bloom / grade / antialias | off / off / off / off / off | 1024 / off / ½ res / on / FXAA | 2048 / ½ res, 8 samples / ½ res / on / SMAA | 4096 / full res, 16 samples / full res / on / MSAA |
 | Reflections, particles, detail | off, low, plain | on, high, detailed | on, high, detailed | on, high, detailed |
 | Materials (cells, pieces, crowns, garden) | Lambert | Standard | Physical (clearcoat) | Physical |
 | Piece / crown lathe segments | 16 / 12 | 24 / 16 | 40 / 28 | 64 / 40 |
@@ -263,8 +262,8 @@ overlays: pause · settings · profile · help · confirm dialogs · session exp
 
 Nine locales ship: **en-US, en-GB, es-419, es-ES, de-DE, fr-FR, fr-CA, pt-BR, it-IT**, for every player-facing string — menus, setups, the journey map (chapters, 48 stage names and blurbs), lessons, challenges, achievements, themes and cosmetics, the HUD, move log and announcements, dialogs, toasts, the semantic board's square names and the StarHermit strings. "Crown Draughts" stays untranslated.
 
-- **Strings.** Code calls `T('US-English text', { vars })` (`js/i18n/index.js`); `locales/*.js` map that text to each language (en-GB lists only the spelling changes, es-ES and fr-CA only their differences from es-419 and fr-FR). Content tables keep English source text and are translated at display time; the engine's move descriptions and reason texts go through the translator `native/i18n.ts` installs (`setTextTranslator`). The StarHermit strings live in `js/ui/platform-i18n.js`.
-- **Resolution.** The game follows the runtime's interface language (`preferences().language`: the player's choice in Options › Language, else the device's), mapped to the nearest shipped locale (`es-MX → es-419`, `en-AU → en-GB`, `pt-PT → pt-BR`). The browser build's own Language selector, `?lang=` override and account lookup are the runtime's now.
+- **Strings.** Code calls `T('US-English text', { vars })` (`native/i18n.ts`); the engine's string tables (`assets/strings.json`) map that text to each language (en-GB lists only the spelling changes); a line past the engine's 256-character key limit has a short `long.*` key. Content tables keep English source text and are translated at display time; the engine's move descriptions and reason texts go through the translator `native/i18n.ts` installs (`setTextTranslator`). The game's own StarHermit lines are `platform.*` in the same file; shared account lines are the engine's `starhermit.*`.
+- **Resolution.** The game follows the runtime's interface language (`preferences().language`: the player's choice in Options › Language, else the device's), mapped by the engine's locale chain to the nearest shipped locale. The browser build's own Language selector, `?lang=` override and account lookup are the runtime's now.
 - **Live switching.** A change applies on the next frame everywhere (the UI is immediate mode): setup choices, chat, the move log (whose lines re-describe themselves), the coach and open dialogs keep their state.
 
 ## 10. Accessibility
