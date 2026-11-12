@@ -1,3 +1,4 @@
+import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // Crown Draughts on the StarHermit engine: the entry module (starhermit.txt
 // engine.entry), played natively by the StarHermit client and in browsers by
 // the engine's web runtime. The rules, AI, content, progression, sessions and
@@ -145,8 +146,12 @@ onUpdate((dt) => {
   A.tick();
   render.update(dt, f.width, f.height, app.paused);
 });
-onRender(() => {
+onRender(__l10nRender(() => {
   drawScreens();
   handlePointer();
   if (app.game && app.boardShown && app.screen === "game") render.setHover(app.game.cursor);
-});
+}));
+
+// localization-runtime:menu
+import { installLanguageMenu as __installLanguageMenu } from "./l10n/menu.ts";
+__installLanguageMenu(false);

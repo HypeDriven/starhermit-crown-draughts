@@ -51,3 +51,7 @@ engine.gamepad.hint=North
 engine.gamepad.camera=LeftStickPress
 engine.gamepad.board=Select
 engine.gamepad.skip=RightShoulder
+
+# Game language (saved per player); Automatic follows the account/device.
+control.localization=F2 | Language
+engine.group.localization=Interface

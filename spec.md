@@ -346,3 +346,11 @@ QA bar (checkable): every mode reachable from the visible UI on desktop and phon
 - Platform achievement submission; voice rooms.
 - A truce illustration on results; `TERMINAL_REASON_TEXT['move-limit-failed']` with `levelFail`.
 - A dedicated authored intensity stem for endgames.
+
+<!-- regional-localization:start -->
+
+### Regional interface languages
+
+The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-SG`, `en-HK`, `en-BQ`, `es-CO`, `de-IT`, `fr-IT`, `es-CL`, `es-AR`, `es-EC`, `de-BR`. These reuse the corresponding existing translations in their language family. The runtime can resolve the exact regional tag. Language selection is available from the game’s Options panel or F2 and is saved per player in `ui.language`. Changes apply during play. Additional national, regional and indigenous language packs are only shipped once every English message has a translation with intact placeholders and markup. Complete additional language tables: `ja-JP`, `nl-BE`, `zh-SG`, `ms-SG`, `nl-NL`, `fi-FI`, `sv-FI`, `id-ID`, `vi-VN`, `et-EE`, `ta-SG`, `zh-HK`, `yue-HK`, `ru-FI`, `ru-EE`, `da-DE`, `lb-BE`, `co-FR`, `eu-FR`, `ca-FR`, `oc-FR`, `sl-IT`, `fur-IT`, `ca-IT`, `oc-IT`, `ca-ES`, `eu-ES`, `gl-ES`, `su-ID`, `bew-ID`, `km-VN`.
+
+<!-- regional-localization:end -->

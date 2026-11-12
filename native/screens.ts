@@ -1,3 +1,6 @@
+import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
+// localization-runtime:attached
+import { openLocalizedOptions as __l10nOptions } from "./l10n/menu.ts";
 // Every screen, dialog and the in-round HUD on starhermit:ui, drawn each
 // frame from the app's state (the browser build's js/ui/screens.js, the HUD
 // of js/ui/app.js and the semantic board of js/ui/boarddom.js). Layout
@@ -5,7 +8,14 @@
 // windows; drawers over it with a bottom tray on compact ones (narrower than
 // 1024 logical px, or a short landscape window); a single column with a
 // two-row tray on phones held upright.
-import { frame, openMenu } from "starhermit:engine";
+// Every screen, dialog and the in-round HUD on starhermit:ui, drawn each
+// frame from the app's state (the browser build's js/ui/screens.js, the HUD
+// of js/ui/app.js and the semantic board of js/ui/boarddom.js). Layout
+// follows the old style sheet's breakpoints: rails beside the board on wide
+// windows; drawers over it with a bottom tray on compact ones (narrower than
+// 1024 logical px, or a short landscape window); a single column with a
+// two-row tray on phones held upright.
+import { frame } from "starhermit:engine";
 import { bindingLabel } from "starhermit:input";
 import * as draw from "starhermit:draw";
 import * as ui from "starhermit:ui";
@@ -39,13 +49,13 @@ const phone = (): boolean => VW < 760 && VH > VW;
 const landscapeShort = (): boolean => VH < 560 && VW > VH;
 
 function btn(label: string, cls: string | false = false, opts: ui.ButtonOptions = {}): boolean {
-  const hit = ui.style("btn", cls).button(label, opts);
+  const hit = ui.style(__l10nStyle("btn"), __l10nStyle(cls)).button(label, opts);
   if (hit) audio.play("uiClick");
   return hit;
 }
-function lbl(text: string, cls = "text"): void { ui.style(cls).label(text); }
-function para(text: string, width: number, cls = "text"): void { ui.style(cls).paragraph(text, Math.max(40, width)); }
-function heading(text: string, cls = "h2"): void { ui.style(cls).heading(text); }
+function lbl(text: string, cls = "text"): void { ui.style(__l10nStyle(cls)).label(text); }
+function para(text: string, width: number, cls = "text"): void { ui.style(__l10nStyle(cls)).paragraph(text, Math.max(40, width)); }
+function heading(text: string, cls = "h2"): void { ui.style(__l10nStyle(cls)).heading(text); }
 /** Buttons in rows that wrap at `width` (CSS flex-wrap). */
 function buttonRows(id: string, items: { label: string; cls?: string | false; opts?: ui.ButtonOptions; run: () => void }[], width: number, justify: ui.Align = "start"): void {
   ui.row(id, () => {
@@ -109,7 +119,7 @@ function radioGroup<V>(id: string, legend: string, options: { value: V; label: s
     ui.column(`${id}-opts`, () => {
       for (const o of options) {
         const on = o.value === current;
-        const hit = ui.id(`${id}-${String(o.value)}`).style("radio-card").button(o.label, {
+        const hit = ui.id(`${id}-${String(o.value)}`).style(__l10nStyle("radio-card")).button(o.label, {
           selected: on,
           content: () => {
             lbl(o.label, "card-name");
@@ -146,15 +156,15 @@ function titleScreen(): void {
     ui.column("title-block", () => {
       ui.column("emblem", () => { /* the emblem image is the box's background */ }, { width: 112, height: 112, style: "emblem-img" });
       // The browser build's clamp(2.4rem, 7vw, 4.4rem).
-      ui.style("game-title", { text: { size: Math.max(38.4, Math.min(70.4, VW * 0.07)) } }).heading(T("Crown Draughts"));
+      ui.style(__l10nStyle("game-title"), __l10nStyle({ text: { size: Math.max(38.4, Math.min(70.4, VW * 0.07)) } })).heading(T("Crown Draughts"));
       para(T("A carved stone board in a royal garden."), w, "tagline");
     }, { align: "center", spacing: 8, width: w });
     ui.id("title-actions").column(T("Main menu"), () => {
       const resume = A.pendingSnapshot();
       if (resume && btn(T("Resume round — {label}", { label: resume.label }), "btn-primary", {})) A.resumeSnapshot();
-      if (ui.id("play").style("btn", "btn-primary", "btn-xl").button(T("Play"))) { audio.play("uiConfirm"); A.go("modes"); }
+      if (ui.id("play").style(__l10nStyle("btn"), __l10nStyle("btn-primary"), __l10nStyle("btn-xl")).button(T("Play"))) { audio.play("uiConfirm"); A.go("modes"); }
       const date = A.todayDaily().date.slice(5);
-      if (ui.id("daily").style("btn").button(T("Daily Court — {date}", { date }))) A.startDaily();
+      if (ui.id("daily").style(__l10nStyle("btn")).button(T("Daily Court — {date}", { date }))) A.startDaily();
       if (btn(T("Journey"))) A.go("journey");
       if (btn(T("Learn the rules"))) A.go("learn");
     }, { spacing: 10, width: Math.min(340, w), align: "stretch" });
@@ -167,7 +177,7 @@ function titleScreen(): void {
       if (!platform.signedIn()) {
         buttonRows("title-signin", [{ label: SH("signIn"), cls: "btn-ghost", run: () => A.signIn() }], w, "center");
       } else {
-        ui.style("note", { text: { align: "center" } }).paragraph(P("playingAs", { name: app.profile.name }), w);
+        ui.style(__l10nStyle("note"), __l10nStyle({ text: { align: "center" } })).paragraph(P("playingAs", { name: app.profile.name }), w);
         if (platform.inviteLink()) buttonRows("title-invite", [{ label: SH("invite"), cls: "btn-ghost", run: () => A.copyInviteLink() }], w, "center");
       }
     }, { spacing: 10, width: w, align: "center", padding: { top: 14 } });
@@ -201,7 +211,7 @@ function modesScreen(): void {
     const cw = (w - gap * (cols - 1)) / cols;
     ui.grid("mode-grid", () => {
       for (const m of MODES) {
-        const hit = ui.id(`mode-${m.id}`).style("mode-card").button(T(m.name), {
+        const hit = ui.id(`mode-${m.id}`).style(__l10nStyle("mode-card")).button(T(m.name), {
           content: () => {
             lbl(T(m.name), "card-title");
             if (!phone()) para(T(m.desc), cw - 34, "card-body");
@@ -286,11 +296,11 @@ function journeyScreen(): void {
             const unlocked = stageUnlocked(progress, s);
             const name = rec?.completed ? T("{name}, completed with {stars} stars", { name: T(s.name), stars: rec.stars })
               : T(unlocked ? "{name}, available" : "{name}, locked", { name: T(s.name) });
-            const hit = ui.id(`stage-${s.id}`).style("stage-cell", rec?.completed && "stage-done", s.mastery && "stage-mastery",
-              { width: cell, height: cell }).button(name, {
+            const hit = ui.id(`stage-${s.id}`).style(__l10nStyle("stage-cell"), __l10nStyle(rec?.completed && "stage-done"), __l10nStyle(s.mastery && "stage-mastery"),
+              __l10nStyle({ width: cell, height: cell })).button(name, {
               disabled: !unlocked,
               content: () => {
-                ui.style("text", { text: { align: "center" } }).label(String(s.index));
+                ui.style(__l10nStyle("text"), __l10nStyle({ text: { align: "center" } })).label(String(s.index));
                 ui.row("stars", () => {
                   if (rec?.completed) for (let k = 0; k < rec.stars; k++) glyph("star", 10, "#d4af37");
                   else if (!unlocked) glyph("lock", 12, "#c9c0a8");
@@ -337,7 +347,7 @@ function learnScreen(): void {
     para(T("Each lesson teaches one rule and asks you to play it. Lessons use the same legal-move engine as every other mode."), w);
     for (const lesson of LESSONS) {
       const isDone = done.has(lesson.id);
-      const hit = ui.id(`lesson-${lesson.id}`).style("mode-card", isDone && "card-done").button(T(lesson.title), {
+      const hit = ui.id(`lesson-${lesson.id}`).style(__l10nStyle("mode-card"), __l10nStyle(isDone && "card-done")).button(T(lesson.title), {
         content: () => {
           lbl(T(lesson.title), "card-name");
           para(T(lesson.intro), w - 34, "muted");
@@ -359,7 +369,7 @@ function challengesScreen(): void {
     heading(T("Challenges"));
     for (const c of CHALLENGES) {
       const rec = progress.challenges[c.id];
-      const hit = ui.id(`ch-${c.id}`).style("mode-card", rec?.completed && "card-done").button(T(c.name), {
+      const hit = ui.id(`ch-${c.id}`).style(__l10nStyle("mode-card"), __l10nStyle(rec?.completed && "card-done")).button(T(c.name), {
         content: () => {
           lbl(T(c.name), "card-title");
           para(T(c.desc), w - 34, "card-body");
@@ -452,7 +462,7 @@ function lobbyScreen(): void {
       ui.row(`inv-${inv.id}`, () => {
         lbl(P("from", { name: inv.name }));
         ui.spacer();
-        if (ui.id(`join-${inv.id}`).style("btn", "btn-primary").button(P("join"))) void A.acceptTableInvite(inv.id);
+        if (ui.id(`join-${inv.id}`).style(__l10nStyle("btn"), __l10nStyle("btn-primary")).button(P("join"))) void A.acceptTableInvite(inv.id);
       }, { width: iw, align: "center", spacing: 8 });
     }
     actionsRow("lobby-back", iw, [{ label: T("Back"), cls: "btn-ghost", run: () => A.go("modes") }]);
@@ -481,7 +491,7 @@ function tableRoomScreen(): void {
         ui.row(`friend-${f.userId}`, () => {
           lbl(`${f.name} · ${f.online ? P("online") : P("offline")}`);
           ui.spacer();
-          if (ui.id(`invite-${f.userId}`).style("btn", "btn-small").button(f.invited ? P("invited") : P("sendInvite"), { disabled: !!f.invited || !!f.busy })) void A.inviteFriend(f);
+          if (ui.id(`invite-${f.userId}`).style(__l10nStyle("btn"), __l10nStyle("btn-small")).button(f.invited ? P("invited") : P("sendInvite"), { disabled: !!f.invited || !!f.busy })) void A.inviteFriend(f);
         }, { width: iw, align: "center", spacing: 8 });
       }
     }
@@ -504,8 +514,8 @@ function resultsScreen(): void {
   const tone = goalMissed ? "result-loss" : over.winner === null ? "result-draw" : outcome.iWon ? "result-win" : "result-loss";
   screen("results", 520, (w) => panel("results-panel", w, (iw) => {
     if (banner) ui.column("banner", () => { /* the illustration is the box's background */ }, { width: iw, height: iw * 384 / 896, style: banner });
-    ui.style(tone).paragraph(headline, iw);
-    ui.style("center-muted").paragraph(T(over.reasonText), iw);
+    ui.style(__l10nStyle(tone)).paragraph(headline, iw);
+    ui.style(__l10nStyle("center-muted")).paragraph(T(over.reasonText), iw);
     heading(T("Score breakdown"), "legend");
     const rows: [string, number][] = [
       [T("Captures"), brk.components.captures], [T("Crowns taken"), brk.components.crowns], [T("Pieces preserved"), brk.components.survival],
@@ -515,18 +525,18 @@ function resultsScreen(): void {
     ui.grid("breakdown", () => {
       for (const [label, val] of rows) {
         lbl(label, "bd-label");
-        ui.style(val < 0 ? "bd-neg" : "bd-value").label(val > 0 ? `+${val}` : String(val));
+        ui.style(__l10nStyle(val < 0 ? "bd-neg" : "bd-value")).label(val > 0 ? `+${val}` : String(val));
       }
       lbl(T("Total"), "bd-total");
-      ui.style("bd-total", { text: { align: "end" } }).label(String(brk.total));
+      ui.style(__l10nStyle("bd-total"), __l10nStyle({ text: { align: "end" } })).label(String(brk.total));
     }, { columns: [{ fr: 1 }, { width: "auto", align: "end" }], gap: { row: 6, column: 12 }, width: iw, rowStyle: "bd-row" });
     const f = [T("{n} plies", { n: over.plies })];
     if (Number.isFinite(over.elapsedMs)) f.push(`${(over.elapsedMs / 1000).toFixed(0)}s`);
     if (outcome.ratingDelta) f.push(T("rating {delta}", { delta: `${outcome.ratingDelta > 0 ? "+" : ""}${outcome.ratingDelta}` }));
     if (over.assistsUsed) f.push(T("assists used"));
     ui.row("facts-row", () => {
-      ui.style("center-muted").label(f.join(" · "));
-      if (outcome.stars) { ui.style("center-muted").label("·"); for (let k = 0; k < outcome.stars; k++) glyph("star", 14, "#d4af37"); }
+      ui.style(__l10nStyle("center-muted")).label(f.join(" · "));
+      if (outcome.stars) { ui.style(__l10nStyle("center-muted")).label("·"); for (let k = 0; k < outcome.stars; k++) glyph("star", 14, "#d4af37"); }
     }, { spacing: 4, justify: "center", width: iw, align: "center" });
     for (const key of outcome.unlocked || []) {
       const a = ACHIEVEMENTS.find((x: Any) => x.key === key);
@@ -534,7 +544,7 @@ function resultsScreen(): void {
     }
     for (const m of outcome.mastery || []) para(T("Mastery reward: {reward}", { reward: T(m.label) }), iw, "unlock");
     const lb = A.leaderboardLine();
-    if (lb) ui.style("center-muted").paragraph(lb, iw);
+    if (lb) ui.style(__l10nStyle("center-muted")).paragraph(lb, iw);
     const items: { label: string; cls?: string | false; run: () => void }[] = [];
     if (outcome.nextAction) items.push({ label: outcome.nextAction.label(), cls: "btn-primary", run: outcome.nextAction.fn });
     items.push({ label: T("Play again"), run: () => A.retryLast() });
@@ -550,9 +560,9 @@ function hudTopbar(): void {
   ui.place("topbar", "top", () => {
     ui.row("topbar-row", () => {
       ui.column("topbar-left", () => {
-        ui.style("hud-title").label(A.objectiveTitle(s.config, app.lessonRun?.lesson));
+        ui.style(__l10nStyle("hud-title")).label(A.objectiveTitle(s.config, app.lessonRun?.lesson));
         const sub = A.objectiveSub(s.config);
-        if (sub) ui.style("objective-sub").label(sub);
+        if (sub) ui.style(__l10nStyle("objective-sub")).label(sub);
       }, { spacing: 2 });
       ui.spacer();
       ui.row("topbar-right", () => {
@@ -563,13 +573,13 @@ function hudTopbar(): void {
           ui.row("turn", () => {
             ui.widget("turn-color", { role: "none", size: { width: 10, height: 18 }, draw: (r) => draw.roundRect(r.x, r.y, r.width, r.height, 3, COLOR_HEX[pl.color] || "#e8ddc4") });
             // Phones: the banner wraps beside the title and the Pause button.
-            if (phone()) ui.style("text", { text: { size: 13, weight: "700" } }).paragraph(text, Math.max(90, VW - 250));
+            if (phone()) ui.style(__l10nStyle("text"), __l10nStyle({ text: { size: 13, weight: "700" } })).paragraph(text, Math.max(90, VW - 250));
             else ui.label(text);
           }, { style: "turn-banner", spacing: 8, align: "center" });
         }
         if (app.clock && !phone()) clocks();
-        if (app.thinking) ui.style("thinking").label("…");
-        if (ui.id("pause").style("btn", "btn-ghost").button(T("Pause"))) { audio.play("uiClick"); A.togglePause(true); }
+        if (app.thinking) ui.style(__l10nStyle("thinking")).label("…");
+        if (ui.id("pause").style(__l10nStyle("btn"), __l10nStyle("btn-ghost")).button(T("Pause"))) { audio.play("uiClick"); A.togglePause(true); }
       }, { spacing: 10, align: "center" });
     }, { width: VW, align: "start", padding: { top: 8, bottom: 8, start: 12, end: 12 }, style: "topbar" });
     if (app.clock && phone()) ui.row("clock-row", () => clocks(), { spacing: 8, padding: { start: 12 } });
@@ -582,7 +592,7 @@ function clocks(): void {
     const total = Math.max(0, Math.round(ms / 1000));
     const txt = `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
     const cls = total <= 10 ? "clock-low" : i === app.clockTurn ? "clock-active" : "clock";
-    ui.style(cls, { text: { numerals: "tabular" } }).label(`${T(st.players[i]?.name) || i}: ${txt}`);
+    ui.style(__l10nStyle(cls), __l10nStyle({ text: { numerals: "tabular" } })).label(`${T(st.players[i]?.name) || i}: ${txt}`);
   });
 }
 
@@ -596,7 +606,7 @@ function coachCard(w: number): void {
     para(c.title, iw, "rail-h");
     para(c.text, iw, "text");
     if (c.kind === "action") para(T("Your turn — play the move."), iw, "lesson-goal");
-    else if (ui.id("coach-continue").style("btn", "btn-primary").button(T("Continue"))) {
+    else if (ui.id("coach-continue").style(__l10nStyle("btn"), __l10nStyle("btn-primary")).button(T("Continue"))) {
       audio.play("uiConfirm");
       // The lesson may end (and the round with it): after this frame's UI.
       queueMicrotask(() => A.lessonAdvance());
@@ -635,7 +645,7 @@ function rightRail(w: number, chatH: number): void {
       heading(T("Actions"), "rail-h");
       const bw = (iw - 6) / 2;
       ui.grid("action-grid", () => {
-        const b = (label: string, run: () => void): void => { if (ui.style("btn", "btn-ghost", { width: bw, padding: 6 }).button(label)) { audio.play("uiClick"); run(); } };
+        const b = (label: string, run: () => void): void => { if (ui.style(__l10nStyle("btn"), __l10nStyle("btn-ghost"), __l10nStyle({ width: bw, padding: 6 })).button(label)) { audio.play("uiClick"); run(); } };
         b(T("Undo"), () => app.game?.requestUndo());
         b(T("Hint"), () => app.game?.requestHint());
         b(T("Offer draw"), () => { void A.offerDraw(); });
@@ -651,11 +661,11 @@ function rightRail(w: number, chatH: number): void {
         const sti = stats[i];
         ui.row(`house-${i}`, () => {
           glyph("dot", 10, COLOR_HEX[pl.color] || "#e8ddc4");
-          ui.style("player-name").label(T(pl.name));
+          ui.style(__l10nStyle("player-name")).label(T(pl.name));
           ui.spacer();
-          ui.style("player-mat").label(String(sti.piecesLeft));
+          ui.style(__l10nStyle("player-mat")).label(String(sti.piecesLeft));
           glyph("dot", 9, "#c9c0a8");
-          ui.style("player-mat").label(String(sti.crownedLeft));
+          ui.style(__l10nStyle("player-mat")).label(String(sti.crownedLeft));
           glyph("crown", 11, "#c9c0a8");
         }, { width: iw, spacing: 4, align: "center", style: i === st.turn ? "player-row-active" : "player-row" });
       });
@@ -784,7 +794,7 @@ function gameHud(): void {
     tray();
   }
   if (app.countdown && app.countdown.i >= 0 && app.countdown.i < app.countdown.steps.length) {
-    ui.place("countdown", "center", () => { ui.style("countdown").label(app.countdown!.steps[app.countdown!.i]!); });
+    ui.place("countdown", "center", () => { ui.style(__l10nStyle("countdown")).label(app.countdown!.steps[app.countdown!.i]!); });
   }
 }
 
@@ -797,8 +807,8 @@ function toasts(): void {
       const cls = t.kind === "warn" ? "toast-warn" : t.kind === "ok" ? "toast-ok" : "toast";
       const max = Math.min(VW - 64, 520);
       const tw = ui.measureText(t.text, { style: cls }).width / SCALE;
-      if (tw <= max) ui.style(cls).label(t.text);
-      else ui.column(`toast-${t.until}`, () => { ui.style(cls === "toast" ? "text" : cls === "toast-ok" ? { text: { color: "$ok" } } : { text: { color: "$warn" } }).paragraph(t.text, max); }, { style: cls });
+      if (tw <= max) ui.style(__l10nStyle(cls)).label(t.text);
+      else ui.column(`toast-${t.until}`, () => { ui.style(__l10nStyle(cls === "toast" ? "text" : cls === "toast-ok" ? { text: { color: "$ok" } } : { text: { color: "$warn" } })).paragraph(t.text, max); }, { style: cls });
     }
   }, { spacing: 6, align: "center" });
 }
@@ -841,7 +851,7 @@ function pauseDialog(): void {
   card("pause", T("Paused"), 380, (w) => {
     if (hosted) para(T("Hosted round: the clock keeps running while you are away."), w, "note");
     ui.column("pause-actions", () => {
-      if (ui.id("resume").style("btn", "btn-primary").button(T("Resume"))) { A.closeModal(); }
+      if (ui.id("resume").style(__l10nStyle("btn"), __l10nStyle("btn-primary")).button(T("Resume"))) { A.closeModal(); }
       if (btn(T("Settings"))) A.openModal({ kind: "settings", tab: 0 });
       if (btn(T("How to play"))) A.openModal({ kind: "help" });
       if (btn(T("Leave round"), "btn-danger")) void A.leaveRound();
@@ -854,7 +864,7 @@ function confirmModal(m: Extract<A.Modal, { kind: "confirm" }>): void {
     ui.row("confirm-actions", () => {
       ui.spacer();
       if (btn(T("Cancel"), "btn-ghost")) A.answerConfirm(false);
-      if (ui.id("confirm-ok").style("btn", m.danger ? "btn-danger" : "btn-primary").button(m.confirmLabel)) { audio.play("uiConfirm"); A.answerConfirm(true); }
+      if (ui.id("confirm-ok").style(__l10nStyle("btn"), __l10nStyle(m.danger ? "btn-danger" : "btn-primary")).button(m.confirmLabel)) { audio.play("uiConfirm"); A.answerConfirm(true); }
     }, { spacing: 8, width: w });
   });
 }
@@ -902,7 +912,7 @@ function settingsModal(m: Extract<A.Modal, { kind: "settings" }>): void {
   card("settings", T("Settings"), 720, (w) => {
     ui.row("settings-tabs", () => {
       SETTINGS_TABS.forEach((label, i) => {
-        if (ui.id(`tab-${i}`).style("tab").button(T(label), { selected: m.tab === i }) && m.tab !== i) { audio.play("tabSwitch"); m.tab = i; }
+        if (ui.id(`tab-${i}`).style(__l10nStyle("tab")).button(T(label), { selected: m.tab === i }) && m.tab !== i) { audio.play("tabSwitch"); m.tab = i; }
       });
     }, { spacing: 5, role: "radiogroup" });
     if (m.tab === 0) {
@@ -939,7 +949,7 @@ function settingsModal(m: Extract<A.Modal, { kind: "settings" }>): void {
     }
     para(T("Sound, graphics quality, controls, language, text size, high contrast and reduced motion are in the StarHermit Options (F1)."), w, "note");
   }, (w) => buttonRows("settings-foot", [
-    { label: T("StarHermit Options"), cls: "btn-ghost", run: () => openMenu() },
+    { label: T("StarHermit Options"), cls: "btn-ghost", run: () => __l10nOptions() },
     { label: T("Close"), cls: "btn-primary", run: () => A.closeModal() },
   ], w, "end"));
 }
@@ -986,9 +996,9 @@ function profileModal(): void {
     for (const ms of MASTERY_TRACK) {
       const claimed = stats.stars >= ms.stars;
       ui.row(`mastery-${ms.stars}`, () => {
-        ui.style(claimed ? "mastery-on" : "muted").label(String(ms.stars));
+        ui.style(__l10nStyle(claimed ? "mastery-on" : "muted")).label(String(ms.stars));
         glyph("star", 12, claimed ? "#d4af37" : "#c9c0a8");
-        ui.style(claimed ? "mastery-on" : "muted").label(T(ms.label));
+        ui.style(__l10nStyle(claimed ? "mastery-on" : "muted")).label(T(ms.label));
         ui.spacer();
         if (claimed) glyph("check", 14, "#d4af37");
       }, { width: w, spacing: 8, align: "center", style: "mastery-row" });

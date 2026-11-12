@@ -1,3 +1,5 @@
+// localization-runtime:attached
+import { localizedFont as __l10nFont, setLocalizedStyles as __l10nStyles } from "./l10n/font.ts";
 // The look of the menus and HUD: the browser build's style sheet
 // (tools/ui-style.css, converted once with `starhermit css` into
 // assets/ui-style.json by `npm run css`) registered as starhermit:ui styles,
@@ -29,17 +31,17 @@ export function setStyle(): void {
   });
   const modal = css.styles[".modal"]!;
   const veil = css.styles[".veil"]!;
-  ui.setStyles({
+  __l10nStyles({
     ...css.styles,
     dialog: {
       background: modal.background!, radius: modal.radius!, padding: modal.padding!, border: modal.border!,
       shadow: { y: 12, blur: 40, color: "rgba(0,0,0,0.5)" },
-      inside: { heading: { text: { font: "serif", size: 24, weight: "600", color: "$ink" } } },
+      inside: { heading: { text: { font: __l10nFont("serif"), size: 24, weight: "600", color: "$ink" } } },
       parts: { backdrop: { background: veil.background! } },
     },
     label: { text: { color: "$ink" } },
     paragraph: { text: { color: "$ink" } },
-    heading: { text: { color: "$ink", font: "serif", weight: "600" } },
+    heading: { text: { color: "$ink", font: __l10nFont("serif"), weight: "600" } },
     checkbox: { text: { color: "$ink" }, minHeight: 40, parts: { box: { background: "$field", border: { width: 1, color: "$line" }, radius: 4 }, mark: { background: "$accent" } } },
     select: {
       text: { color: "$ink" },
