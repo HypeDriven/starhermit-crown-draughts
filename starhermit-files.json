@@ -27,7 +27,7 @@
     "assets/ui-style.json": {"sha256": "b003aa539d97456da8352709d702ccf77d3174c3c67573fd77ea81206fc1e316", "size": 16889},
     "cover.jpg": {"sha256": "2a689a89429ab4d484ef21c048be395833d7126ce1b32f107363b297a45ccaad", "size": 256966},
     "icon.png": {"sha256": "ea506186b6dfdd293b25d21e55c3af03d2276fbae78570287a5ff4d4cf94e2d5", "size": 7297},
-    "index.html": {"sha256": "742fbb5476119236c8b9e79db061445fc787298aa0f00daec51b6115e1dc18c2", "size": 1942},
+    "index.html": {"sha256": "28413488de2783891777279b66ed713316957d7a30a591028da59380ea92118c", "size": 1942},
     "js/content/achievements.js": {"sha256": "f5396ca16eefb56c2ab2a4fad3d1beb1aa34676dcdf8608325c9c0ebf3cce660", "size": 2215},
     "js/content/baked.js": {"sha256": "41bac4a05a65e861c37dad51782048570e8002a4c90bbcf582baa117f0631e60", "size": 31674},
     "js/content/challenges.js": {"sha256": "3cecc2080dc9c91331ade4cbf3fadb4616243fdd6f96fee457fec4e25b8210fd", "size": 4394},
@@ -58,6 +58,7 @@
     "native/render.ts": {"sha256": "0976cdf0c1aae0079104692078a120988af704840536fe1a9befb80c2b7badbc", "size": 51380},
     "native/screens.ts": {"sha256": "2bf604986784a619b7f835fc7a2a8a4ad4ea59949d6888303cf0a078cc0f1e16", "size": 59769},
     "native/style.ts": {"sha256": "33497beb4d42e61bac31f9cd5078c2cdeb6ebc17bd9ac6ce50858b6ef9f964c5", "size": 3916},
+    "publication.json": {"sha256": "1e11b6b5bca56dc21b86fd6e5ffddd9142e84fd86899fa6a6da56c153b928a18", "size": 3226},
     "server.js": {"sha256": "a1a84a79753ff1f683932e6ad7754dc341cd289f19945734cb22f35eff5baa3c", "size": 58151},
     "sfx/amb-dusk-conservatory.opus": {"sha256": "7fa878bf3ec040d25b076d2bb1a746b449f56af4290a9a370cee915da03afa86", "size": 164459},
     "sfx/amb-ember-court.opus": {"sha256": "9fadb31d7542cb51159489a1a38deddc2f8bcedec2cbc0ec612f4fadfa311d7a", "size": 159507},
@@ -109,7 +110,7 @@
     "sfx/ui-toggle.opus": {"sha256": "8191d447bf21b03f164794ec1a2027d1ee008e73cfd02901d99128a86987c54f", "size": 11545},
     "sfx/undo.opus": {"sha256": "f8dc6f41babcf20fea052f70add901398582ef4b9eb4869c9a80d95b36899909", "size": 11812},
     "sfx/win.opus": {"sha256": "d56587d3ecf3be9d22efc14e6b58c4233efc9067d4704728b919e5ecded404a8", "size": 63771},
-    "starhermit.txt": {"sha256": "542c3f3a1e9143e746737e291a5010d121c70d2a287be5b6f7f943ff487e9817", "size": 2125}
+    "starhermit.txt": {"sha256": "1ea676cf8271c5e0ff7c49e2ebd0625f0cf53946efef117b8ca31d93e5b9442a", "size": 2125}
   },
   "excluded": ["coverart.png", "knownissues.md", "leaderboards.json", "package.json", "spec.md", "tests/", "tools/", "tsconfig.json"],
   "format": 1
