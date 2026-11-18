@@ -1,3 +1,4 @@
+import { bindings } from "starhermit:input";
 import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
 // localization-runtime:attached
 import { openLocalizedOptions as __l10nOptions } from "./l10n/menu.ts";
@@ -1042,7 +1043,7 @@ function dialogs(): void {
 }
 
 // ------------------------------------------------------------------ the frame
-export function drawScreens(): void {
+function drawScreensImmediate(): void {
   measureViewport();
   switch (app.screen) {
     case "title": titleScreen(); break;
@@ -1063,4 +1064,11 @@ export function drawScreens(): void {
   consentBanner();
   toasts();
   dialogs();
+}
+
+export function drawScreens(): void {
+  if (!(app.modals.some((modal) => modal.kind === "help"))) { drawScreensImmediate(); return; }
+  const actions = ["confirm","cancel","up","down","left","right","pause","undo","hint","camera","mute","board","help","skip"];
+  const version = JSON.stringify([(app as any).settings ?? (app as any).options ?? {}, (platform as any).options ?? {}, actions.map((action) => bindings(action))]);
+  ui.retain!("help-screen", version, drawScreensImmediate);
 }
