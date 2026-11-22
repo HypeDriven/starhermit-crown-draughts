@@ -2,9 +2,9 @@
 
 **Pitch:** carved-stone draughts in a royal garden — mandatory captures, chain jumps and crowning on an 8×8 duel court, a 10×10 grand court, or a four-house 10×10 melee, against a deterministic alpha-beta AI, a friend on the same device, or a hosted table.
 **Genre:** turn-based abstract board strategy. **Players:** 1 (vs AI), 2–4 pass-and-play, 2–4 hosted. **Session:** 2–5 min per lesson, 3–10 min per journey stage, 5–25 min per full game.
-**Platforms:** a StarHermit engine script game (engine 1.44.1, host API 1.44): played natively by the StarHermit client and in desktop and mobile browsers (portrait and landscape) by the engine's web runtime; keyboard, mouse, touch and gamepad.
+**Platforms:** a StarHermit engine script game (engine 1.47.0, host API 1.47): played natively by the StarHermit client and in desktop and mobile browsers (portrait and landscape) by the engine's web runtime; keyboard, mouse, touch and gamepad.
 **Rendering:** the royal garden and the board on `starhermit:scene` (three.js-like; procedural geometry, baked grey factor maps for the stone, grass and hedge, no external 3D assets); menus, HUD and a fully playable semantic board on `starhermit:ui`.
-**Version:** `starhermit.txt` declares `version=1.0.0`, `content-version=1`, `launch=index.html` (the engine's web loader), `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.44.1`, `engine.minor=44`, `engine.capabilities=platform,storage,clipboard`, `server=server.js`, `cover=cover.jpg`.
+**Version:** `starhermit.txt` declares `version=1.0.0`, `content-version=1`, `launch=index.html` (the engine's web loader), `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.47.0`, `engine.minor=47`, `engine.capabilities=platform,storage,clipboard`, `server=server.js`, `cover=cover.jpg`.
 
 | Path | Responsibility |
 |---|---|
@@ -355,8 +355,12 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 <!-- regional-localization:end -->
 
-## Engine 1.44.1
+## Engine 1.47.0
 
-Browser play uses the WebGPU-only StarHermit 1.44.1 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the WebGPU-only StarHermit 1.47.0 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
+
+Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
+
+Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.

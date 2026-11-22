@@ -40,7 +40,7 @@
     "cover.jpg": {"sha256": "2a689a89429ab4d484ef21c048be395833d7126ce1b32f107363b297a45ccaad", "size": 256966},
     "icon.png": {"sha256": "ea506186b6dfdd293b25d21e55c3af03d2276fbae78570287a5ff4d4cf94e2d5", "size": 7297},
     "icon.png.ktx2": {"sha256": "97ddaaac919e51fb0264a6ab98f0fe54a6dd7c158f39532d837f126b09d16a88", "size": 87776},
-    "index.html": {"sha256": "7225dbc0a714ca1a0583c5064de9a9e66525838c971e2bbea4166e68be6b3a70", "size": 1784},
+    "index.html": {"sha256": "d3ed4d2bd17d76c27465bca55e11c6a4f08bb12f8b7798a8e3395479abd0fd2e", "size": 1784},
     "js/content/achievements.js": {"sha256": "f5396ca16eefb56c2ab2a4fad3d1beb1aa34676dcdf8608325c9c0ebf3cce660", "size": 2215},
     "js/content/baked.js": {"sha256": "41bac4a05a65e861c37dad51782048570e8002a4c90bbcf582baa117f0631e60", "size": 31674},
     "js/content/challenges.js": {"sha256": "3cecc2080dc9c91331ade4cbf3fadb4616243fdd6f96fee457fec4e25b8210fd", "size": 4394},
@@ -68,10 +68,10 @@
     "native/main.ts": {"sha256": "57d4e8c6391af9011d5e37d08273cbd3bfb5d329c2323e190eac1daf20c55058", "size": 6534},
     "native/platform.ts": {"sha256": "757bf3daecf35a8921ffc30b099e81eb7021eb341f55e25d4cd612fe0dd2c4a5", "size": 16119},
     "native/quality.ts": {"sha256": "be50a341657be0c6c6c730db38827b20d20882794abef4057633511a6de25e1a", "size": 4185},
-    "native/render.ts": {"sha256": "0976cdf0c1aae0079104692078a120988af704840536fe1a9befb80c2b7badbc", "size": 51380},
+    "native/render.ts": {"sha256": "9aecb2719929a03991d6f277faa8691e1f15f811b034a4e3703a92a8b2d467c2", "size": 51511},
     "native/screens.ts": {"sha256": "a2078ccdb7496a0ce22b90b45d5233cf59b02cde6efb71f428bf46f2aea37113", "size": 60305},
     "native/style.ts": {"sha256": "33497beb4d42e61bac31f9cd5078c2cdeb6ebc17bd9ac6ce50858b6ef9f964c5", "size": 3916},
-    "publication.json": {"sha256": "349b94abc27f5b2ac6cd18f4fab9835b79a06e15248c488fed70f895698d16b9", "size": 3226},
+    "publication.json": {"sha256": "0e2bedb33b986c0cf32ca56937bace0b1e0696bb90ed3ee1ce32bc0f18809b5f", "size": 4132},
     "server.js": {"sha256": "a1a84a79753ff1f683932e6ad7754dc341cd289f19945734cb22f35eff5baa3c", "size": 58151},
     "sfx/amb-dusk-conservatory.opus": {"sha256": "7fa878bf3ec040d25b076d2bb1a746b449f56af4290a9a370cee915da03afa86", "size": 164459},
     "sfx/amb-ember-court.opus": {"sha256": "9fadb31d7542cb51159489a1a38deddc2f8bcedec2cbc0ec612f4fadfa311d7a", "size": 159507},
@@ -123,7 +123,7 @@
     "sfx/ui-toggle.opus": {"sha256": "8191d447bf21b03f164794ec1a2027d1ee008e73cfd02901d99128a86987c54f", "size": 11545},
     "sfx/undo.opus": {"sha256": "f8dc6f41babcf20fea052f70add901398582ef4b9eb4869c9a80d95b36899909", "size": 11812},
     "sfx/win.opus": {"sha256": "d56587d3ecf3be9d22efc14e6b58c4233efc9067d4704728b919e5ecded404a8", "size": 63771},
-    "starhermit.txt": {"sha256": "b67f62a50e084bc8856ba1d56eb36a429aa5adc9795c580c69064a746dc96db3", "size": 2177}
+    "starhermit.txt": {"sha256": "ca281fe1dd163daa991812f27199ed953460796dfa9816294dd9d0d8af9a95c2", "size": 2200}
   },
   "excluded": ["coverart.png", "knownissues.md", "leaderboards.json", "package.json", "spec.md", "tests/", "tools/", "tsconfig.json"],
   "format": 1
