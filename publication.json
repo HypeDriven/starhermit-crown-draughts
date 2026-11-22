@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-08-17T16:43:24.000458+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-18T16:45:12.88025+00:00",
+    "coverArtUpdatedAt": "2026-11-22T14:19:48.331967+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-18T16:45:12.844099+00:00",
+      "deployedAt": "2026-11-22T14:19:48.295651+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.44.1",
+      "engineVersion": "1.47.0",
       "deployWarning": null
     },
     "description": "Capture rival pieces, chain jumps, and crown kings in draughts matches across several board formats.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-18T16:45:12.789Z",
-  "sourceCommit": "f49fb3154f9c0062d2c2901df7a1272537b32e76",
-  "bytesReceived": 5332749,
-  "archiveSha256": "4b9aff10f5486fdd5df51f56190c40d74f0f552a19f7fdc0cb045755760df596",
+  "publishedAt": "2026-11-22T14:19:48.718Z",
+  "sourceCommit": "a7bd34c41e18bd41b921afe636ea8464b17fefa5",
+  "bytesReceived": 5333537,
+  "archiveSha256": "a28166e849b7226414785cfe54b3fed9c2af99c3bf326ed1f2b1955260874e82",
   "indexSha256": "37effe12b99beddbc14bbec35f5ad5394f161e88626a1d1f0f8c61ea38ca9945",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 5332749,
+    "bytesReceived": 5333537,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.44.1",
+    "engineVersion": "1.47.0",
     "deployWarning": null
   },
   "liveVerification": {
