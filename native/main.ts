@@ -1,3 +1,4 @@
+import { showCursor } from "./cursor.ts";
 import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // Crown Draughts on the StarHermit engine: the entry module (starhermit.txt
 // engine.entry), played natively by the StarHermit client and in browsers by
@@ -26,6 +27,7 @@ import { app } from "./app.ts";
 setSessionClock(() => frame().time * 1000);
 
 onStart(() => {
+  showCursor();
   initLanguage();
   setStyle();
   platform.initPlatform();
