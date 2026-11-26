@@ -68,13 +68,13 @@
     "native/i18n.ts": {"sha256": "982a7b86688f6a379a3c2e5a8e879231f88d949cd83400d69ee48d659b5d5d7d", "size": 2414},
     "native/l10n/font.ts": {"sha256": "7f1628951943bd20cc3afa3ead0ad5ef2b5d9415683a7bd74953a40cbf5fd142", "size": 6298},
     "native/l10n/menu.ts": {"sha256": "fc100eedcc093719d7aadf6e211916bdbd3787b4e7be5866978bb36b3a1570af", "size": 6317},
-    "native/main.ts": {"sha256": "4560559447250b0e800fc29b72d035562631ccf44fe268fa8176cdea25e65f41", "size": 6592},
+    "native/main.ts": {"sha256": "64ae0f5556a4351fba3aff69709362de5d8976bda609af07e473491de437c8a0", "size": 7130},
     "native/platform.ts": {"sha256": "757bf3daecf35a8921ffc30b099e81eb7021eb341f55e25d4cd612fe0dd2c4a5", "size": 16119},
     "native/quality.ts": {"sha256": "be50a341657be0c6c6c730db38827b20d20882794abef4057633511a6de25e1a", "size": 4185},
-    "native/render.ts": {"sha256": "9aecb2719929a03991d6f277faa8691e1f15f811b034a4e3703a92a8b2d467c2", "size": 51511},
+    "native/render.ts": {"sha256": "02897115b68f9df90acfba525ac029e52d0365922d586936042d817dccd28483", "size": 52210},
     "native/screens.ts": {"sha256": "a2078ccdb7496a0ce22b90b45d5233cf59b02cde6efb71f428bf46f2aea37113", "size": 60305},
     "native/style.ts": {"sha256": "33497beb4d42e61bac31f9cd5078c2cdeb6ebc17bd9ac6ce50858b6ef9f964c5", "size": 3916},
-    "publication.json": {"sha256": "81af2963eac354b8977c2ac203c120e4c9c4d9fe6845028f341b053c7b072822", "size": 4133},
+    "publication.json": {"sha256": "373f6daf5a14484689236f4528710cd97c53f55a997dd4b3ba995aaa9545a373", "size": 4132},
     "server.js": {"sha256": "a1a84a79753ff1f683932e6ad7754dc341cd289f19945734cb22f35eff5baa3c", "size": 58151},
     "sfx/amb-dusk-conservatory.opus": {"sha256": "7fa878bf3ec040d25b076d2bb1a746b449f56af4290a9a370cee915da03afa86", "size": 164459},
     "sfx/amb-ember-court.opus": {"sha256": "9fadb31d7542cb51159489a1a38deddc2f8bcedec2cbc0ec612f4fadfa311d7a", "size": 159507},
@@ -128,6 +128,6 @@
     "sfx/win.opus": {"sha256": "d56587d3ecf3be9d22efc14e6b58c4233efc9067d4704728b919e5ecded404a8", "size": 63771},
     "starhermit.txt": {"sha256": "c7fd2be6b9563609ede00c2e44a438e1e7b91c71f35ec419d4161b68fee08684", "size": 2200}
   },
-  "excluded": ["coverart.png", "knownissues.md", "leaderboards.json", "package-lock.json", "package.json", "spec.md", "tests/", "tools/", "tsconfig.json"],
+  "excluded": ["coverart.png", "knownissues.md", "leaderboards.json", "package.json", "spec.md", "tests/", "tools/", "tsconfig.json"],
   "format": 1
 }

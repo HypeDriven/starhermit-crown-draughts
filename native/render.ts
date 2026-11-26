@@ -251,6 +251,7 @@ class BoardView {
     const ornGeo = new SphereGeometry(0.16, 12, 10);
     for (let i = 0; i < 4; i++) { const m = new Mesh(ornGeo, slabMat); m.castShadow = true; this.ornaments.add(m); }
     this.group.add(this.ornaments);
+    for (const o of [this.slab, this.frame, this.railN, this.railS, this.railE, this.railW, this.ornaments]) o.movable = false;
   }
 
   buildMarkers(): void {
@@ -293,6 +294,8 @@ class BoardView {
     this.railW.scale.set(1, 1, s + 1.3); this.railW.position.set(-railOff, 0.06, 0);
     const off = (s + 1.15) / 2 - 0.28;
     this.ornaments.children.forEach((m, i) => { m.position.set((i & 1 ? 1 : -1) * off, 0.2, (i & 2 ? 1 : -1) * off); });
+    // Still (movable = false): the scene's sync reads their new size only when told.
+    for (const o of [this.slab, this.frame, this.railN, this.railS, this.railE, this.railW, this.ornaments, ...this.ornaments.children]) o.matrixWorldNeedsUpdate = true;
     if (this.cellsLight) { this.group.remove(this.cellsLight); this.group.remove(this.cellsDark!); }
     const lightMat = litMaterial({ map: tex("marble-cell"), color: tint(t.stoneLight, "marble-cell"), roughness: 0.55 }, true);
     const darkMat = litMaterial({ map: tex("slate-cell"), color: tint(t.stoneDark, "slate-cell", 0x9aa0b0), roughness: 0.6 }, true);
@@ -309,6 +312,7 @@ class BoardView {
       im.count = list.length;
       im.instanceMatrix.needsUpdate = true;
       im.receiveShadow = true;
+      im.movable = false;
       this.group.add(im);
       return im;
     };
@@ -572,10 +576,12 @@ class Garden {
     ground.rotation.x = -PI / 2;
     ground.position.y = -0.62;
     ground.receiveShadow = true;
+    ground.movable = false;
     g.add(ground);
     const terrace = new Mesh(new CylinderGeometry(9.5, 10.2, 0.25, 40), litMaterial({ map: tex("marble-path"), color: tint(t.path, "marble-path"), roughness: 0.8 }));
     terrace.position.y = -0.55;
     terrace.receiveShadow = true;
+    terrace.movable = false;
     g.add(terrace);
 
     // hedge ring
@@ -598,6 +604,7 @@ class Garden {
     hedges.instanceMatrix.needsUpdate = true;
     hedges.castShadow = true;
     hedges.receiveShadow = true;
+    hedges.movable = false;
     g.add(hedges);
 
     if (t.env.trees) {
@@ -609,6 +616,7 @@ class Garden {
         const trunk = new Mesh(trunkGeo, trunkMat);
         trunk.position.set(x, 0.25, z);
         trunk.castShadow = true;
+        trunk.movable = false;
         g.add(trunk);
         for (let b = 0; b < 3; b++) {
           const leaf = new Mesh(leafGeo, leafMat);
@@ -628,10 +636,12 @@ class Garden {
       basin.position.set(0, -0.3, -11.5);
       basin.castShadow = true;
       basin.receiveShadow = true;
+      basin.movable = false;
       g.add(basin);
       const pillar = new Mesh(new CylinderGeometry(0.22, 0.34, 1.5, 12), stoneMat);
       pillar.position.set(0, 0.6, -11.5);
       pillar.castShadow = true;
+      pillar.movable = false;
       g.add(pillar);
       this.water = new Mesh(new CircleGeometry(1.55, 32),
         litMaterial({ color: t.water, roughness: 0.08, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, opacity: 0.9 }, true));
@@ -650,6 +660,7 @@ class Garden {
         const post = new Mesh(postGeo, postMat);
         post.position.set(x, 0.15, z);
         post.castShadow = true;
+        post.movable = false;
         g.add(post);
         const glow = new Mesh(new SphereGeometry(0.18, 10, 8), litMaterial({ color: glowColor, emissive: glowColor, emissiveIntensity: 5 }));
         glow.position.set(x, 1.05, z);
@@ -667,6 +678,7 @@ class Garden {
         inst.setMatrixAt(i, m4);
       }
       inst.instanceMatrix.needsUpdate = true;
+      inst.movable = false;
       g.add(inst);
     }
 
@@ -695,6 +707,7 @@ class Garden {
     }
     kerbs.instanceMatrix.needsUpdate = true;
     kerbs.receiveShadow = true;
+    kerbs.movable = false;
     this.detailGroup.add(kerbs);
     const blossom = new InstancedMesh(flowerGeo, litMaterial({ color: 0xf4efe0, roughness: 0.7 }), 70);
     for (let i = 0; i < 70; i++) {
@@ -703,6 +716,7 @@ class Garden {
       blossom.setMatrixAt(i, m4);
     }
     blossom.instanceMatrix.needsUpdate = true;
+    blossom.movable = false;
     this.detailGroup.add(blossom);
     g.add(this.detailGroup);
 

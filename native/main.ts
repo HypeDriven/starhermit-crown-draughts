@@ -7,8 +7,8 @@ import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // unchanged in behaviour; the screens and HUD are starhermit:ui
 // (screens.ts), the garden and board starhermit:scene (render.ts), the
 // controller app.ts and game.ts, saves and the platform platform.ts.
-import { frame, levelSettings, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences } from "starhermit:engine";
-import { onAction, onPointerButton, onPointerMove, onTouch } from "starhermit:input";
+import { frame, levelSettings, onPreferencesChange, onRender, onResume, onStart, onSuspend, onUpdate, preferences, setTargetFps } from "starhermit:engine";
+import { onAction, onPointerButton, onPointerMove, onTouch, primaryPointer } from "starhermit:input";
 import { onSessionEnded } from "starhermit:platform";
 import * as ui from "starhermit:ui";
 import { setSessionClock } from "../js/core/session.js";
@@ -139,11 +139,22 @@ function handlePointer(): void {
 // ------------------------------------------------------------------ frame
 let lookKey = "";
 let look = lookFor(levelSettings("molecular"));
+/** The game's frame cap (host API 1.49 setTargetFps, set only on a change): 30 on phone levels
+ * (levelIndex <= 3) under a finger, none otherwise. The menus keep the display rate: the garden
+ * and the board stay in view behind them. Animation and clocks run on dt / wall time. */
+let frameCap = -1;
+function capFrames(): void {
+  const cap = frame().levelIndex <= 3 && primaryPointer() === "coarse" ? 30 : 0;
+  if (cap === frameCap) return;
+  frameCap = cap;
+  setTargetFps(cap || null);
+}
 onUpdate((dt) => {
   const f = frame();
   const key = f.level;
   if (key !== lookKey) { lookKey = key; look = lookFor(levelSettings(f.level)); setHudBlur(look.budget.hudBlur); }
   render.applyLook(look);
+  capFrames();
   audio.poll(dt);
   A.tick();
   render.update(dt, f.width, f.height, app.paused);
