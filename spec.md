@@ -2,9 +2,9 @@
 
 **Pitch:** carved-stone draughts in a royal garden — mandatory captures, chain jumps and crowning on an 8×8 duel court, a 10×10 grand court, or a four-house 10×10 melee, against a deterministic alpha-beta AI, a friend on the same device, or a hosted table.
 **Genre:** turn-based abstract board strategy. **Players:** 1 (vs AI), 2–4 pass-and-play, 2–4 hosted. **Session:** 2–5 min per lesson, 3–10 min per journey stage, 5–25 min per full game.
-**Platforms:** a StarHermit engine script game (engine 1.51.0, host API 1.51): played natively by the StarHermit client and in desktop and mobile browsers (portrait and landscape) by the engine's web runtime; keyboard, mouse, touch and gamepad.
+**Platforms:** a StarHermit engine script game (engine 1.53.0, host API 1.53): played natively by the StarHermit client and in desktop and mobile browsers (portrait and landscape) by the engine's web runtime; keyboard, mouse, touch and gamepad.
 **Rendering:** the royal garden and the board on `starhermit:scene` (three.js-like; procedural geometry, baked grey factor maps for the stone, grass and hedge, no external 3D assets); menus, HUD and a fully playable semantic board on `starhermit:ui`.
-**Version:** `starhermit.txt` declares `version=1.0.0`, `content-version=1`, `launch=index.html` (the engine's web loader), `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.51.0`, `engine.minor=51`, `engine.capabilities=platform,storage,clipboard`, `server=server.js`, `cover=cover.jpg`.
+**Version:** `starhermit.txt` declares `version=1.0.0`, `content-version=1`, `launch=index.html` (the engine's web loader), `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.53.0`, `engine.minor=53`, `engine.capabilities=platform,storage,clipboard`, `server=server.js`, `cover=cover.jpg`.
 
 | Path | Responsibility |
 |---|---|
@@ -355,16 +355,18 @@ The string tables include complete regional variants for `fr-BE`, `de-BE`, `en-S
 
 <!-- regional-localization:end -->
 
-## Engine 1.51.0
+## Engine 1.53.0
 
-Browser play uses the StarHermit 1.51.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the StarHermit 1.53.0 web runtime on WebGPU, or WebGL 2 where WebGPU is missing. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 The help screen replays through retained native UI while its contents, options, layout and key bindings are unchanged.
 
 Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
 
-**Frame rate (host API 1.51 `setTargetFps`).** Under a finger (`primaryPointer() === "coarse"`) the game caps itself at 30 frames a second on the phone graphics levels (`levelIndex` ≤ 3), where even 33 ms frames replace uneven ones; elsewhere, the title included (the garden and board stay in view behind it), there is no game cap. Animation and the game's clocks run on frame time and the wall clock, so play is unchanged. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
+**Frame rate (host API 1.53 `setTargetFps`).** Under a finger (`primaryPointer() === "coarse"`) the game caps itself at 30 frames a second on the phone graphics levels (`levelIndex` ≤ 3), where even 33 ms frames replace uneven ones; elsewhere, the title included (the garden and board stay in view behind it), there is no game cap. Animation and the game's clocks run on frame time and the wall clock, so play is unchanged. The engine sets the cap aside while its menus are open, and the player's Frame rate limit still applies.
 
-**Still scenery (host API 1.51).** The board's slab, frame, rails, corner ornaments and cell grids, and the garden's lawn, terrace, hedges, tree trunks, fountain stone, lantern posts, flower beds, kerbs and blossoms are `movable = false`, so the renderer caches them in shadow maps from the first frame and the scene's sync skips their transforms. A new game resizes the board's frame and signals it with `matrixWorldNeedsUpdate`. The pieces, crowns and markers, the swaying leaves, the bobbing fountain water, the flickering lantern glows and the drifting petals stay movable.
+**Still scenery (host API 1.53).** The board's slab, frame, rails, corner ornaments and cell grids, and the garden's lawn, terrace, hedges, tree trunks, fountain stone, lantern posts, flower beds, kerbs and blossoms are `movable = false`, so the renderer caches them in shadow maps from the first frame and the scene's sync skips their transforms. A new game resizes the board's frame and signals it with `matrixWorldNeedsUpdate`. The pieces, crowns and markers, the swaying leaves, the bobbing fountain water, the flickering lantern glows and the drifting petals stay movable.
 
 Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.
+
+On engine 1.53.0, browser play through WebGL 2 compiles a frame's shader programs together and holds that frame until they are linked, blends skinned meshes in one pass, reuses the window pass's depth, and uses a hardware WebGL 2 context when WebGPU's adapter is software.
